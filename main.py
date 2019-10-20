@@ -156,8 +156,8 @@ class MainWin(QWidget):
         for filename in Path(self.text_box.text()).glob('**/*.*'):
             if filename.as_uri().endswith(('.png', '.jpg')):
                 self.files.append(filename.as_posix())
-        self.progress_bar.setFormat(' Scanning (%p%, %v/%m)')
-        self.compare_prog.setFormat(' Comparing (%p%, %v/%m)')
+        self.progress_bar.setFormat(' Scanning (%p%)')
+        self.compare_prog.setFormat(' Comparing (%p%)')
         self.progress_bar.setMaximum(len(self.files))
         self.iterate_files()
         self.update_list()
