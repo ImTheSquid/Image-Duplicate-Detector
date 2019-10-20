@@ -6,6 +6,8 @@ import gc
 import shutil
 
 from pathlib import Path
+
+from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QWidget, QApplication, QHBoxLayout, QGroupBox, QFileDialog, QVBoxLayout, QProgressBar, \
     QLabel, QLineEdit, QPushButton, QListWidget, QCheckBox
 from PyQt5.QtCore import pyqtSlot
@@ -129,6 +131,7 @@ class MainWin(QWidget):
     def init_gui(self, layout):
         # Init the basic window frame
         self.setWindowTitle('Duplicate Photo Detector v.1.0')
+        self.setWindowIcon(QIcon('icon.png'))
         self.setLayout(layout)
         self.show()
 
