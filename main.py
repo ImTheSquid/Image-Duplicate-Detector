@@ -109,13 +109,14 @@ class MainWin(QWidget):
 
     def init_right_half(self):
         vert_right = QVBoxLayout()
-        self.list_label = QLabel('No files')
+        self.list_label = QLabel()
         vert_right.addWidget(self.list_label)
         self.file_list = QListWidget()
         vert_right.addWidget(self.file_list)
         self.show_all = QCheckBox('Show All Files')
         vert_right.addWidget(self.show_all)
         self.show_all.clicked.connect(self.update_list)
+        self.update_list()
 
         vert_right.addStretch()
 
