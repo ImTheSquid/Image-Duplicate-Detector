@@ -2,29 +2,52 @@ import cv2
 import sys
 import os
 import numpy as np
-import gc
 import shutil
+
+from datetime import datetime
 
 from pathlib import Path
 
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QWidget, QApplication, QHBoxLayout, QGroupBox, QFileDialog, QVBoxLayout, QProgressBar, \
-    QLabel, QLineEdit, QPushButton, QListWidget, QCheckBox
-from PyQt5.QtCore import pyqtSlot, QThreadPool
+    QLabel, QLineEdit, QPushButton, QListWidget, QCheckBox, QMessageBox
+from PyQt5.QtCore import pyqtSlot, QThreadPool, pyqtSignal
 
-
-# Compares two images, one of which is already in an image format to save memory
 from worker import Worker
 
 
+# Compares two images, one of which is already in an image format to save memory
+def compare_files(image1, file2):
+    height1, width1, channel1 = image1.shape
+    image2 = cv2.imread(file2)
+    height2, width2, channel2 = image2.shape
+
+    # Does something that keeps my program responsive, but I don't know what it is
+    cv2.waitKey(0)
+
+    if (not height1 == height2) or (not width1 == width2):
+        return False
+
+    gray1 = cv2.cvtColor(image1, cv2.COLOR_BGR2GRAY)
+    gray2 = cv2.cvtColor(image2, cv2.COLOR_BGR2GRAY)
+
+    err = np.sum((gray1.astype("float") - gray2.astype("float")) ** 2)
+    err /= float(gray1.shape[0] * gray2.shape[1])
+
+    return err == 0
+
+
 class MainWin(QWidget):
+    progress_signal = pyqtSignal(tuple)
+
+    # File storage
+    files = []
+    duplicates = {}
+    # Files that couldn't be moved
+    file_move_error = []
 
     def __init__(self):
         super().__init__()
-
-        # File storage
-        self.files = []
-        self.duplicates = []
 
         # Init layouts and progress bar
         main_with_progress = QVBoxLayout()
@@ -53,9 +76,10 @@ class MainWin(QWidget):
         main_layout.addWidget(right_half)
 
         # Init thread
+        self.progress_signal.connect(self.update_progress)
         self.thread_pool = QThreadPool()
-        self.thread_worker = Worker(self.files, self.duplicates)
-        self.thread_worker.signals.progress.connect(self.update_progress)
+        self.thread_worker = Worker(self.iterate_files)
+        self.thread_worker.signals.progress.connect(self.progress_signal)
         self.thread_worker.signals.finished.connect(self.update_after_completion)
 
         # Finish up
@@ -102,6 +126,7 @@ class MainWin(QWidget):
         self.list_label = QLabel()
         vert_right.addWidget(self.list_label)
         self.file_list = QListWidget()
+        self.file_list.clicked.connect(self.list_clicked)
         vert_right.addWidget(self.file_list)
         self.show_all = QCheckBox('Show All Files')
         vert_right.addWidget(self.show_all)
@@ -110,7 +135,7 @@ class MainWin(QWidget):
 
         vert_right.addStretch()
 
-        self.move_button = QPushButton('Move Duplicates and Reset')
+        self.move_button = QPushButton('Reset')
         self.move_button.setEnabled(False)
         self.move_button.clicked.connect(self.move_files)
         vert_right.addWidget(self.move_button)
@@ -123,13 +148,11 @@ class MainWin(QWidget):
         self.setLayout(layout)
         self.show()
 
-    @pyqtSlot()
     def update_progress(self, status):
         self.compare_prog.setMinimum(status[0] + 1)
         self.compare_prog.setMaximum(len(self.files))
         self.progress_bar.setValue(status[0])
         self.compare_prog.setValue(status[1])
-
 
     @pyqtSlot()
     def open_folder(self):
@@ -161,30 +184,33 @@ class MainWin(QWidget):
         self.progress_bar.setMaximum(len(self.files))
         self.thread_pool.start(self.thread_worker)
 
-    '''
-    def iterate_files(self):
-        for firstImg in range(len(self.files)):
-            
-            image1 = cv2.imread(self.files[firstImg])
-            for secondImg in range(firstImg + 1, len(self.files)):
-                self.compare_prog.setValue(secondImg)
-                print('Comparing image ' + str(firstImg) + ' with image ' + str(secondImg))
-                if compare_files(image1, self.files[secondImg]):
-                    self.duplicates.append(self.files[secondImg])
-        self.progress_bar.setFormat(' Done (%p%)')
-        self.compare_prog.setMinimum(0)
-        self.compare_prog.setValue(0)
-        self.compare_prog.setFormat(' Waiting (%p%)')
-        self.move_button.setEnabled(len(self.duplicates) > 0)'''
+    def iterate_files(self, prog_sig):
+        for first_img in range(len(self.files)):
+            image1 = cv2.imread(self.files[first_img])
+            for second_img in range(first_img + 1, len(self.files)):
+                if compare_files(image1, self.files[second_img]):
+                    self.duplicates[self.files[second_img]] = self.files[first_img]
+                prog_sig.emit((first_img, second_img))
 
     @pyqtSlot()
     def update_after_completion(self):
         self.progress_bar.setFormat(' Done (%p%)')
+        self.progress_bar.setValue(self.progress_bar.maximum())
         self.compare_prog.setMinimum(0)
         self.compare_prog.setValue(0)
         self.compare_prog.setFormat(' Waiting (%p%)')
-        self.move_button.setEnabled(len(self.duplicates) > 0)
+        self.move_button.setEnabled(True)
+        self.move_button.setText('Move Duplicates and Reset' if len(self.duplicates) > 0 else 'Reset')
         self.update_list()
+
+    @pyqtSlot()
+    def list_clicked(self):
+        if self.show_all.isChecked():
+            return
+        QMessageBox.information(self, 'File Location', 'This file is a duplicate of "' + self.duplicates[
+            self.file_list.currentItem().text().replace('.', self.text_box.text(), 1)].replace(self.text_box.text(),
+                                                                                               '.') + '"',
+                                QMessageBox.Ok)
 
     @pyqtSlot()
     def can_find_files(self):
@@ -201,7 +227,11 @@ class MainWin(QWidget):
         if not dup_loc[-1] == '/':
             dup_loc += '/'
         for file in self.duplicates:
-            shutil.move(file, dup_loc+file.split('/')[-1])
+            try:
+                shutil.move(file, dup_loc + file.split('/')[-1])
+            except FileNotFoundError or PermissionError:
+                self.file_move_error.append(file)
+        self.write_log()
         self.reset()
 
     def reset(self):
@@ -227,15 +257,34 @@ class MainWin(QWidget):
             self.list_label.setText('Showing ' + str(len(self.files)) + ' file' +
                                     ('s' if not len(self.files) == 1 else '')
                                     + ' including ' + str(len(self.duplicates)) +
-                                    ' duplicate'+('s' if not len(self.duplicates) == 1 else ''))
+                                    ' duplicate' + ('s' if not len(self.duplicates) == 1 else ''))
             display = self.files
         else:
             self.list_label.setText('Showing ' + str(len(self.duplicates)) +
-                                    ' duplicate'+('s' if not len(self.duplicates) == 1 else ''))
+                                    ' duplicate' + ('s' if not len(self.duplicates) == 1 else ''))
             display = self.duplicates
         self.file_list.clear()
         for file in display:
             self.file_list.addItem(file.replace(self.text_box.text(), '.'))
+
+    def write_log(self):
+        now = datetime.now()
+        dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
+        file = open(self.duplicate_box.text() + '/log-' + dt_string.replace('/', '-').replace(':', '-') + '.txt', 'w')
+        file.write('LOG FILE FOR DUPLICATE PHOTO DETECTOR ON ' + dt_string + '\n')
+        file.write('If two sections are touching, there are no items in the former section.\n')
+        file.write('==========DIRECTORY SCANNED==========\n')
+        file.write(self.text_box.text() + '\n')
+        file.write('==========DUPLICATES FOUND==========\n')
+        for dupe in self.duplicates:
+            file.write('"' + dupe.replace(self.text_box.text(), '.') +
+                       '" dupe of "' + self.duplicates[dupe].replace(self.text_box.text(), '.') + '\n')
+        file.write('==========ERROR MOVING FILES==========\n')
+        for err in self.file_move_error:
+            file.write(err.replace(self.text_box.text(), '.') + '\n')
+        file.write('==========FILES SCANNED==========\n')
+        for f in self.files:
+            file.write(f.replace(self.text_box.text(), '.') + '\n')
 
 
 if __name__ == '__main__':
