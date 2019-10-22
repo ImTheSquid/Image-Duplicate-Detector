@@ -10,29 +10,11 @@ from pathlib import Path
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QWidget, QApplication, QHBoxLayout, QGroupBox, QFileDialog, QVBoxLayout, QProgressBar, \
     QLabel, QLineEdit, QPushButton, QListWidget, QCheckBox
-from PyQt5.QtCore import pyqtSlot
+from PyQt5.QtCore import pyqtSlot, QThreadPool
 
 
 # Compares two images, one of which is already in an image format to save memory
-def compare_files(image1, file2):
-    height1, width1, channel1 = image1.shape
-    image2 = cv2.imread(file2)
-    height2, width2, channel2 = image2.shape
-
-    # Does something that keeps my program responsive, but I don't know what it is
-    cv2.waitKey(0)
-
-    if (not height1 == height2) or (not width1 == width2):
-        gc.collect()
-        return False
-
-    gray1 = cv2.cvtColor(image1, cv2.COLOR_BGR2GRAY)
-    gray2 = cv2.cvtColor(image2, cv2.COLOR_BGR2GRAY)
-
-    err = np.sum((gray1.astype("float") - gray2.astype("float")) ** 2)
-    err /= float(gray1.shape[0] * gray2.shape[1])
-
-    return err == 0
+from worker import Worker
 
 
 class MainWin(QWidget):
@@ -69,6 +51,12 @@ class MainWin(QWidget):
         right_half = QGroupBox('Files')
         right_half.setLayout(self.init_right_half())
         main_layout.addWidget(right_half)
+
+        # Init thread
+        self.thread_pool = QThreadPool()
+        self.thread_worker = Worker(self.files, self.duplicates)
+        self.thread_worker.signals.progress.connect(self.update_progress)
+        self.thread_worker.signals.finished.connect(self.update_after_completion)
 
         # Finish up
         main_with_progress.addLayout(main_layout)
@@ -136,6 +124,14 @@ class MainWin(QWidget):
         self.show()
 
     @pyqtSlot()
+    def update_progress(self, status):
+        self.compare_prog.setMinimum(status[0] + 1)
+        self.compare_prog.setMaximum(len(self.files))
+        self.progress_bar.setValue(status[0])
+        self.compare_prog.setValue(status[1])
+
+
+    @pyqtSlot()
     def open_folder(self):
         dialog = QFileDialog.getExistingDirectory(self, 'Open Directory', '/home')
         if dialog:
@@ -163,14 +159,12 @@ class MainWin(QWidget):
         self.progress_bar.setFormat(' Scanning (%p%)')
         self.compare_prog.setFormat(' Comparing (%p%)')
         self.progress_bar.setMaximum(len(self.files))
-        self.iterate_files()
-        self.update_list()
+        self.thread_pool.start(self.thread_worker)
 
+    '''
     def iterate_files(self):
         for firstImg in range(len(self.files)):
-            self.progress_bar.setValue(firstImg+1)
-            self.compare_prog.setMinimum(firstImg+1)
-            self.compare_prog.setMaximum(len(self.files))
+            
             image1 = cv2.imread(self.files[firstImg])
             for secondImg in range(firstImg + 1, len(self.files)):
                 self.compare_prog.setValue(secondImg)
@@ -181,7 +175,16 @@ class MainWin(QWidget):
         self.compare_prog.setMinimum(0)
         self.compare_prog.setValue(0)
         self.compare_prog.setFormat(' Waiting (%p%)')
+        self.move_button.setEnabled(len(self.duplicates) > 0)'''
+
+    @pyqtSlot()
+    def update_after_completion(self):
+        self.progress_bar.setFormat(' Done (%p%)')
+        self.compare_prog.setMinimum(0)
+        self.compare_prog.setValue(0)
+        self.compare_prog.setFormat(' Waiting (%p%)')
         self.move_button.setEnabled(len(self.duplicates) > 0)
+        self.update_list()
 
     @pyqtSlot()
     def can_find_files(self):
