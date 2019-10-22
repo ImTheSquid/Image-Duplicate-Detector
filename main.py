@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import QWidget, QApplication, QHBoxLayout, QGroupBox, QFile
     QLabel, QLineEdit, QPushButton, QListWidget, QCheckBox, QMessageBox
 from PyQt5.QtCore import pyqtSlot, QThreadPool, pyqtSignal
 
+from image_compare import ImageCompare
 from worker import Worker
 
 
@@ -21,9 +22,6 @@ def compare_files(image1, file2):
     height1, width1, channel1 = image1.shape
     image2 = cv2.imread(file2)
     height2, width2, channel2 = image2.shape
-
-    # Does something that keeps my program responsive, but I don't know what it is
-    cv2.waitKey(0)
 
     if (not height1 == height2) or (not width1 == width2):
         return False
@@ -129,6 +127,7 @@ class MainWin(QWidget):
         self.file_list.clicked.connect(self.list_clicked)
         vert_right.addWidget(self.file_list)
         self.show_all = QCheckBox('Show All Files')
+        self.show_all.setEnabled(False)
         vert_right.addWidget(self.show_all)
         self.show_all.clicked.connect(self.update_list)
         self.update_list()
@@ -143,7 +142,7 @@ class MainWin(QWidget):
 
     def init_gui(self, layout):
         # Init the basic window frame
-        self.setWindowTitle('Duplicate Photo Detector v.1.0')
+        self.setWindowTitle('Duplicate Photo Detector v.1.5')
         self.setWindowIcon(QIcon('icon.png'))
         self.setLayout(layout)
         self.show()
@@ -200,6 +199,7 @@ class MainWin(QWidget):
         self.compare_prog.setValue(0)
         self.compare_prog.setFormat(' Waiting (%p%)')
         self.move_button.setEnabled(True)
+        self.show_all.setEnabled(True)
         self.move_button.setText('Move Duplicates and Reset' if len(self.duplicates) > 0 else 'Reset')
         self.update_list()
 
@@ -207,10 +207,8 @@ class MainWin(QWidget):
     def list_clicked(self):
         if self.show_all.isChecked():
             return
-        QMessageBox.information(self, 'File Location', 'This file is a duplicate of "' + self.duplicates[
-            self.file_list.currentItem().text().replace('.', self.text_box.text(), 1)].replace(self.text_box.text(),
-                                                                                               '.') + '"',
-                                QMessageBox.Ok)
+        path = self.file_list.currentItem().text().replace('.', self.text_box.text(), 1)
+        ImageCompare(self.duplicates[path], path, self)
 
     @pyqtSlot()
     def can_find_files(self):
@@ -248,6 +246,7 @@ class MainWin(QWidget):
         self.duplicate_box.setEnabled(True)
         self.open_dialog.setEnabled(True)
         self.open_dup_diag.setEnabled(True)
+        self.show_all.setEnabled(False)
         self.update_list()
         self.show_all.setChecked(False)
 
@@ -278,7 +277,7 @@ class MainWin(QWidget):
         file.write('==========DUPLICATES FOUND==========\n')
         for dupe in self.duplicates:
             file.write('"' + dupe.replace(self.text_box.text(), '.') +
-                       '" dupe of "' + self.duplicates[dupe].replace(self.text_box.text(), '.') + '\n')
+                       '" dupe of "' + self.duplicates[dupe].replace(self.text_box.text(), '.') + '"\n')
         file.write('==========ERROR MOVING FILES==========\n')
         for err in self.file_move_error:
             file.write(err.replace(self.text_box.text(), '.') + '\n')
