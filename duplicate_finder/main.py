@@ -1,5 +1,4 @@
 import cv2
-import sys
 import os
 import numpy as np
 import shutil
@@ -9,11 +8,11 @@ from datetime import datetime
 from pathlib import Path
 
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QWidget, QApplication, QHBoxLayout, QGroupBox, QFileDialog, QVBoxLayout, QProgressBar, \
-    QLabel, QLineEdit, QPushButton, QListWidget, QCheckBox, QMessageBox
+from PyQt5.QtWidgets import QWidget, QHBoxLayout, QGroupBox, QFileDialog, QVBoxLayout, QProgressBar, \
+    QLabel, QLineEdit, QPushButton, QListWidget, QCheckBox
 from PyQt5.QtCore import pyqtSlot, QThreadPool, pyqtSignal
 
-from image_compare import ImageCompare
+from duplicate_finder.image_compare import ImageCompare
 from worker import Worker
 
 
@@ -35,7 +34,7 @@ def compare_files(image1, file2):
     return err == 0
 
 
-class MainWin(QWidget):
+class DuplicateFinder(QWidget):
     progress_signal = pyqtSignal(tuple)
 
     # File storage
@@ -44,22 +43,28 @@ class MainWin(QWidget):
     # Files that couldn't be moved
     file_move_error = []
 
+    # Currently selected list item
+    current_selection = None
+
     def __init__(self):
         super().__init__()
 
         # Init layouts and progress bar
+        self.move_button = QPushButton('Reset')
+        self.remove_dupe = QPushButton('Mark as Original')
+        self.show_preview = QPushButton('Show Preview')
         main_with_progress = QVBoxLayout()
         progress_bar_container = QGroupBox('Progress')
         prog_bar_box = QVBoxLayout()
 
         self.progress_bar = QProgressBar()
         self.progress_bar.setValue(0)
-        self.progress_bar.setFormat(' Waiting (%p%)')
+        self.progress_bar.setFormat('Waiting (%p%)')
         prog_bar_box.addWidget(self.progress_bar)
 
         self.compare_prog = QProgressBar()
         self.compare_prog.setValue(0)
-        self.compare_prog.setFormat(' Waiting (%p%)')
+        self.compare_prog.setFormat('Waiting (%p%)')
         prog_bar_box.addWidget(self.compare_prog)
 
         progress_bar_container.setLayout(prog_bar_box)
@@ -83,7 +88,7 @@ class MainWin(QWidget):
         # Finish up
         main_with_progress.addLayout(main_layout)
         main_with_progress.addWidget(progress_bar_container)
-        self.init_gui(main_with_progress)
+        self.setLayout(main_with_progress)
 
     def init_left_half(self):
         vert_left = QVBoxLayout()
@@ -126,6 +131,17 @@ class MainWin(QWidget):
         self.file_list = QListWidget()
         self.file_list.clicked.connect(self.list_clicked)
         vert_right.addWidget(self.file_list)
+
+        # List selection tools
+        list_tools = QHBoxLayout()
+        self.show_preview.setEnabled(False)
+        self.show_preview.clicked.connect(self.preview)
+        list_tools.addWidget(self.show_preview)
+        self.remove_dupe.setEnabled(False)
+        self.remove_dupe.clicked.connect(self.remove_duplicate)
+        list_tools.addWidget(self.remove_dupe)
+        vert_right.addLayout(list_tools)
+
         self.show_all = QCheckBox('Show All Files')
         self.show_all.setEnabled(False)
         vert_right.addWidget(self.show_all)
@@ -134,7 +150,6 @@ class MainWin(QWidget):
 
         vert_right.addStretch()
 
-        self.move_button = QPushButton('Reset')
         self.move_button.setEnabled(False)
         self.move_button.clicked.connect(self.move_files)
         vert_right.addWidget(self.move_button)
@@ -143,7 +158,7 @@ class MainWin(QWidget):
     def init_gui(self, layout):
         # Init the basic window frame
         self.setWindowTitle('Duplicate Photo Detector v.1.5')
-        self.setWindowIcon(QIcon('icon.png'))
+        self.setWindowIcon(QIcon('../icon.png'))
         self.setLayout(layout)
         self.show()
 
@@ -174,12 +189,11 @@ class MainWin(QWidget):
         self.open_dialog.setEnabled(False)
         self.open_dup_diag.setEnabled(False)
         self.find_button.setEnabled(False)
-        self.progress_bar.setFormat(' Scanning (%p%)')
+        self.progress_bar.setFormat('Scanning (%p%)')
         for filename in Path(self.text_box.text()).glob('**/*.*'):
-            if filename.as_uri().endswith(('.png', '.jpg')):
+            if filename.as_uri().endswith(('.png', '.jpg', '.jpeg')):
                 self.files.append(filename.as_posix())
-        self.progress_bar.setFormat(' Scanning (%p%)')
-        self.compare_prog.setFormat(' Comparing (%p%)')
+        self.compare_prog.setFormat('Comparing (%p%)')
         self.progress_bar.setMaximum(len(self.files))
         self.thread_pool.start(self.thread_worker)
 
@@ -193,14 +207,13 @@ class MainWin(QWidget):
 
     @pyqtSlot()
     def update_after_completion(self):
-        self.progress_bar.setFormat(' Done (%p%)')
+        self.progress_bar.setFormat('Done (%p%)')
         self.progress_bar.setValue(self.progress_bar.maximum())
         self.compare_prog.setMinimum(0)
         self.compare_prog.setValue(0)
-        self.compare_prog.setFormat(' Waiting (%p%)')
-        self.move_button.setEnabled(True)
+        self.compare_prog.setFormat('Waiting (%p%)')
         self.show_all.setEnabled(True)
-        self.move_button.setText('Move Duplicates and Reset' if len(self.duplicates) > 0 else 'Reset')
+        self.move_button.setEnabled(True)
         self.update_list()
 
     @pyqtSlot()
@@ -208,16 +221,27 @@ class MainWin(QWidget):
         if self.show_all.isChecked():
             return
         path = self.file_list.currentItem().text().replace('.', self.text_box.text(), 1)
-        ImageCompare(self.duplicates[path], path, self)
+        self.current_selection = path
+        self.remove_dupe.setEnabled(True)
+        self.show_preview.setEnabled(True)
+
+    @pyqtSlot()
+    def preview(self):
+        ImageCompare(self.duplicates[self.current_selection], self.current_selection, self)
+
+    @pyqtSlot()
+    def remove_duplicate(self):
+        self.duplicates.pop(self.current_selection)
+        self.update_list()
 
     @pyqtSlot()
     def can_find_files(self):
         if os.path.isdir(self.text_box.text()) and os.path.isdir(self.duplicate_box.text()):
             self.find_button.setEnabled(True)
-            self.progress_bar.setFormat(' Ready (%p%)')
+            self.progress_bar.setFormat('Ready (%p%)')
         else:
             self.find_button.setEnabled(False)
-            self.progress_bar.setFormat(' Waiting (%p%)')
+            self.progress_bar.setFormat('Waiting (%p%)')
 
     @pyqtSlot()
     def move_files(self):
@@ -233,8 +257,8 @@ class MainWin(QWidget):
         self.reset()
 
     def reset(self):
-        self.compare_prog.setFormat(' Waiting (%p%)')
-        self.progress_bar.setFormat(' Waiting (%p%)')
+        self.compare_prog.setFormat('Waiting (%p%)')
+        self.progress_bar.setFormat('Waiting (%p%)')
         self.progress_bar.setValue(0)
         self.move_button.setEnabled(False)
         self.list_label.setText('No files')
@@ -252,6 +276,10 @@ class MainWin(QWidget):
 
     @pyqtSlot()
     def update_list(self):
+        self.show_preview.setEnabled(False)
+        self.remove_dupe.setEnabled(False)
+        self.current_selection = None
+        self.move_button.setText('Move Duplicates and Reset' if len(self.duplicates) > 0 else 'Reset')
         if self.show_all.isChecked():
             self.list_label.setText('Showing ' + str(len(self.files)) + ' file' +
                                     ('s' if not len(self.files) == 1 else '')
@@ -270,7 +298,7 @@ class MainWin(QWidget):
         now = datetime.now()
         dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
         file = open(self.duplicate_box.text() + '/log-' + dt_string.replace('/', '-').replace(':', '-') + '.txt', 'w')
-        file.write('LOG FILE FOR DUPLICATE PHOTO DETECTOR ON ' + dt_string + '\n')
+        file.write('LOG FILE FOR JACK\'S DUPLICATE FINDER ON ' + dt_string + '\n')
         file.write('If two sections are touching, there are no items in the former section.\n')
         file.write('==========DIRECTORY SCANNED==========\n')
         file.write(self.text_box.text() + '\n')
@@ -284,9 +312,3 @@ class MainWin(QWidget):
         file.write('==========FILES SCANNED==========\n')
         for f in self.files:
             file.write(f.replace(self.text_box.text(), '.') + '\n')
-
-
-if __name__ == '__main__':
-    app = QApplication([])
-    win = MainWin()
-    sys.exit(app.exec_())
