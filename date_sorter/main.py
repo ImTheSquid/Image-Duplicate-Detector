@@ -1,5 +1,9 @@
 import os
 
+from PIL import Image, ExifTags
+
+from datetime import datetime
+
 from pathlib import Path
 
 from PyQt5.QtCore import pyqtSignal, QThreadPool
@@ -10,7 +14,6 @@ from worker import Worker
 
 
 class DateSorter(QWidget):
-
     progress_signal = pyqtSignal(tuple)
 
     files = []
@@ -120,7 +123,16 @@ class DateSorter(QWidget):
         self.thread_pool.start(self.thread_worker)
 
     def sort_photos(self, update):
-        pass
+        for file in self.files:
+            img = Image.open(file)
+            if file.endswith(('.jpeg')):
+                exif = {ExifTags.TAGS[k]: v for k, v in img.getexif().items() if k in ExifTags.TAGS}
+            elif file.endswith(('.png')):
+                exif = img.text
+            else:
+                exif = img._getexif()
+            if exif is not None and 36867 in exif and not exif[36867][0] == '{':
+                print(datetime.strptime(exif[36867], '%Y:%m:%d %H:%M:%S'))
 
     def update_after_completion(self):
         pass
@@ -130,6 +142,5 @@ class DateSorter(QWidget):
         for filename in Path(self.read_text.text()).glob('**/*.*'):
             if filename.as_uri().endswith(('.png', '.jpg', '.jpeg')):
                 self.files.append(filename.as_posix())
-
         self.progress_bar.setMaximum(len(self.files))
         self.thread_pool.start(self.thread_worker)
