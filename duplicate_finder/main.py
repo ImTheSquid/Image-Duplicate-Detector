@@ -49,6 +49,15 @@ class DuplicateFinder(QWidget):
     def __init__(self):
         super().__init__()
 
+        self.show_all = QCheckBox('Show All Files')
+        self.file_list = QListWidget()
+        self.list_label = QLabel()
+        self.find_button = QPushButton('Find All Duplicates')
+        self.open_dup_dialog = QPushButton('Choose...')
+        self.duplicate_box = QLineEdit()
+        self.open_dialog = QPushButton('Choose...')
+        self.text_box = QLineEdit()
+
         # Init layouts and progress bar
         self.move_button = QPushButton('Reset')
         self.remove_dupe = QPushButton('Mark as Original')
@@ -82,6 +91,7 @@ class DuplicateFinder(QWidget):
         self.progress_signal.connect(self.update_progress)
         self.thread_pool = QThreadPool()
         self.thread_worker = Worker(self.iterate_files)
+        self.thread_worker.setAutoDelete(False)
         self.thread_worker.signals.progress.connect(self.progress_signal)
         self.thread_worker.signals.finished.connect(self.update_after_completion)
 
@@ -97,10 +107,8 @@ class DuplicateFinder(QWidget):
         sel_label = QLabel('Read Directory')
         vert_left.addWidget(sel_label)
         folder_select_box = QHBoxLayout()
-        self.text_box = QLineEdit()
         self.text_box.textEdited.connect(self.can_find_files)
         folder_select_box.addWidget(self.text_box)
-        self.open_dialog = QPushButton('Choose...')
         self.open_dialog.clicked.connect(self.open_folder)
         folder_select_box.addWidget(self.open_dialog)
         vert_left.addLayout(folder_select_box)
@@ -109,16 +117,13 @@ class DuplicateFinder(QWidget):
         dup_label = QLabel('Duplicate Directory')
         vert_left.addWidget(dup_label)
         duplicate_folder_sel = QHBoxLayout()
-        self.duplicate_box = QLineEdit()
         self.duplicate_box.textEdited.connect(self.can_find_files)
         duplicate_folder_sel.addWidget(self.duplicate_box)
-        self.open_dup_diag = QPushButton('Choose...')
-        self.open_dup_diag.clicked.connect(self.open_duplicate_folder)
-        duplicate_folder_sel.addWidget(self.open_dup_diag)
+        self.open_dup_dialog.clicked.connect(self.open_duplicate_folder)
+        duplicate_folder_sel.addWidget(self.open_dup_dialog)
         vert_left.addLayout(duplicate_folder_sel)
         vert_left.addStretch()
 
-        self.find_button = QPushButton('Find All Duplicates')
         self.find_button.clicked.connect(self.find_files)
         self.find_button.setEnabled(False)
         vert_left.addWidget(self.find_button)
@@ -126,9 +131,7 @@ class DuplicateFinder(QWidget):
 
     def init_right_half(self):
         vert_right = QVBoxLayout()
-        self.list_label = QLabel()
         vert_right.addWidget(self.list_label)
-        self.file_list = QListWidget()
         self.file_list.clicked.connect(self.list_clicked)
         vert_right.addWidget(self.file_list)
 
@@ -142,7 +145,6 @@ class DuplicateFinder(QWidget):
         list_tools.addWidget(self.remove_dupe)
         vert_right.addLayout(list_tools)
 
-        self.show_all = QCheckBox('Show All Files')
         self.show_all.setEnabled(False)
         vert_right.addWidget(self.show_all)
         self.show_all.clicked.connect(self.update_list)
@@ -187,7 +189,7 @@ class DuplicateFinder(QWidget):
         self.text_box.setEnabled(False)
         self.duplicate_box.setEnabled(False)
         self.open_dialog.setEnabled(False)
-        self.open_dup_diag.setEnabled(False)
+        self.open_dup_dialog.setEnabled(False)
         self.find_button.setEnabled(False)
         self.progress_bar.setFormat('Scanning (%p%)')
         for filename in Path(self.text_box.text()).glob('**/*.*'):
@@ -269,7 +271,7 @@ class DuplicateFinder(QWidget):
         self.text_box.setEnabled(True)
         self.duplicate_box.setEnabled(True)
         self.open_dialog.setEnabled(True)
-        self.open_dup_diag.setEnabled(True)
+        self.open_dup_dialog.setEnabled(True)
         self.show_all.setEnabled(False)
         self.update_list()
         self.show_all.setChecked(False)
