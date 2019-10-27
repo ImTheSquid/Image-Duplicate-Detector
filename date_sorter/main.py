@@ -1,5 +1,6 @@
 import os
 import shutil
+import platform
 
 from PIL import Image, ExifTags
 
@@ -17,8 +18,10 @@ from worker import Worker
 def check_exists(new_dir, file):
     if not new_dir[-1] == '/':
         new_dir += '/'
+    if platform.system() == 'Windows':
+        new_dir = new_dir.replace('/', '\\')
     try:
-        os.mkdir(new_dir)
+        os.makedirs(new_dir)
     except FileExistsError:
         pass
     finally:
@@ -39,6 +42,7 @@ class DateSorter(QWidget):
 
         self.choose_dest_dir = QPushButton('Choose...')
         self.start = QPushButton('Start')
+        self.days = QRadioButton('Years, Months, and Days')
         self.months = QRadioButton('Years and Months')
         self.years = QRadioButton('Years')
         self.sorted_text = QLineEdit()
@@ -96,6 +100,7 @@ class DateSorter(QWidget):
         self.years.setChecked(True)
         radios.addWidget(self.years)
         radios.addWidget(self.months)
+        radios.addWidget(self.days)
         options.addLayout(radios)
 
         options.addStretch()
@@ -147,13 +152,13 @@ class DateSorter(QWidget):
     def sort_photos(self, update):
         for f in range(0, len(self.files)):
             file = self.files[f]
-            img = Image.open(file)
-            if file.endswith('.jpeg'):
-                exif = {ExifTags.TAGS[k]: v for k, v in img.getexif().items() if k in ExifTags.TAGS}
-            elif file.endswith('.png'):
-                exif = img.text
-            else:
-                exif = img._getexif()
+            with Image.open(file) as img:
+                if file.endswith('.jpeg'):
+                    exif = {ExifTags.TAGS[k]: v for k, v in img.getexif().items() if k in ExifTags.TAGS}
+                elif file.endswith('.png'):
+                    exif = img.text
+                else:
+                    exif = img._getexif()
             if exif is not None and 36867 in exif and not exif[36867][0] == '{':
                 date = datetime.strptime(exif[36867], '%Y:%m:%d %H:%M:%S')
                 self.find_dir(file, date)
@@ -166,7 +171,9 @@ class DateSorter(QWidget):
             check_exists(self.read_text.text() + '/Not_Sortable/', file)
         else:
             check_exists(self.read_text.text() + '/' + str(date.year) + '/' +
-                         (convert_to_month(date.month) + '/' if self.months.isChecked() else ''), file)
+                         ((convert_to_month(date.month) +
+                           '/' if self.months.isChecked() or self.days.isChecked() else '') +
+                          (str(date.day) + '/' if self.days.isChecked() else '')), file)
 
     def update_after_completion(self):
         self.progress_bar.setValue(0)
