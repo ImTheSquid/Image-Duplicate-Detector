@@ -193,7 +193,7 @@ class DuplicateFinder(QWidget):
         self.find_button.setEnabled(False)
         self.progress_bar.setFormat('Scanning (%p%)')
         for filename in Path(self.text_box.text()).glob('**/*.*'):
-            if filename.as_uri().endswith(('.png', '.jpg', '.jpeg')):
+            if filename.as_uri().lower().endswith(('.png', '.jpg', '.jpeg')):
                 self.files.append(filename.as_posix())
         self.compare_prog.setFormat('Comparing (%p%)')
         self.progress_bar.setMaximum(len(self.files))

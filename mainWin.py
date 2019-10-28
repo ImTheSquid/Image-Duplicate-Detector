@@ -1,8 +1,10 @@
 import sys
+import appdirs
 
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication, QWidget, QTabWidget, QHBoxLayout
 
+from albums.main import Albums
 from date_sorter.main import DateSorter
 from duplicate_finder.main import DuplicateFinder
 
@@ -14,7 +16,7 @@ class Runner(QWidget):
 
     def init_gui(self):
         # Init the basic window frame
-        self.setWindowTitle('Jack\'s Photo Utilities v.1.7')
+        self.setWindowTitle('Jack\'s Photo Utilities v.1.8')
         self.setWindowIcon(QIcon('icon.png'))
         layout = QHBoxLayout()
         tabs = QTabWidget()
@@ -22,6 +24,8 @@ class Runner(QWidget):
         tabs.addTab(duplicate_detector, 'Duplicate Finder')
         date_sorter = DateSorter()
         tabs.addTab(date_sorter, 'Date Sorter')
+        albums = Albums()
+        tabs.addTab(albums, 'Albums')
         layout.addWidget(tabs)
         self.setLayout(layout)
         self.show()

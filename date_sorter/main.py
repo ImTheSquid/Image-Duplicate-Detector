@@ -16,16 +16,15 @@ from worker import Worker
 
 
 def check_exists(new_dir, file):
+    # Adds a slash onto the end of the dir to signify a directory
     if not new_dir[-1] == '/':
         new_dir += '/'
     if platform.system() == 'Windows':
         new_dir = new_dir.replace('/', '\\')
-    try:
-        os.makedirs(new_dir)
-    except FileExistsError:
-        pass
-    finally:
-        shutil.move(file, new_dir + file.split('/')[-1])
+
+    # Makes directories and moves files
+    os.makedirs(new_dir, exist_ok=True)
+    shutil.move(file, new_dir + file.split('/')[-1])
 
 
 def convert_to_month(mon):
@@ -170,10 +169,10 @@ class DateSorter(QWidget):
         if date is None:
             check_exists(self.read_text.text() + '/Not_Sortable/', file)
         else:
-            check_exists(self.read_text.text() + '/' + str(date.year) + '/' +
-                         ((convert_to_month(date.month) +
-                           '/' if self.months.isChecked() or self.days.isChecked() else '') +
-                          (str(date.day) + '/' if self.days.isChecked() else '')), file)
+            check_exists(os.path.join(self.read_text.text(), str(date.year),
+                                      (convert_to_month(date.month)
+                                       if self.months.isChecked() or self.days.isChecked() else ''),
+                                      (str(date.day) if self.days.isChecked() else '')), file)
 
     def update_after_completion(self):
         self.progress_bar.setValue(0)
