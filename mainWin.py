@@ -1,7 +1,7 @@
 import sys
-import appdirs
 
-from PyQt5.QtGui import QIcon
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5.QtWidgets import QApplication, QWidget, QTabWidget, QHBoxLayout
 
 from albums.main import Albums
@@ -17,7 +17,8 @@ class Runner(QWidget):
     def init_gui(self):
         # Init the basic window frame
         self.setWindowTitle('Jack\'s Photo Utilities v.1.8')
-        self.setWindowIcon(QIcon('icon.png'))
+        pix = QPixmap('icon.png')
+        self.setWindowIcon(QIcon(pix))
         layout = QHBoxLayout()
         tabs = QTabWidget()
         duplicate_detector = DuplicateFinder()

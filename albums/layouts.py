@@ -1,22 +1,28 @@
 from PyQt5.QtCore import QSize, QRect, Qt, QPoint
-from PyQt5.QtWidgets import QLayout, QLayoutItem, QStyle, QSizePolicy
+from PyQt5.QtGui import QPixmap
+from PyQt5.QtWidgets import QLayout, QLayoutItem, QStyle, QSizePolicy, QWidget, QVBoxLayout, QLabel
 
 
 class FlowLayout(QLayout):
 
-    item_list = []
-
-    def __init__(self, margin=0, v_spacing=0, h_spacing=0, parent=None):
-        super().__init__(parent=parent)
+    def __init__(self, margin=0, v_spacing=0, h_spacing=0):
+        super().__init__()
         self.setContentsMargins(margin, margin, margin, margin)
         self.v_space = v_spacing
         self.h_space = h_spacing
+        self.item_list = []
 
     def __del__(self):
         self.item_list.clear()
 
     def addItem(self, a0: QLayoutItem):
         self.item_list.append(a0)
+
+    def clear_items(self):
+        self.item_list.clear()
+
+    def count(self) -> int:
+        return len(self.item_list)
 
     def smart_spacing(self, pixel_metric):
         if not self.parent():
@@ -45,17 +51,23 @@ class FlowLayout(QLayout):
             size = size.expandedTo(item.minimumSize())
 
         margins = self.contentsMargins()
-        size += QSize(margins.left() + margins.right() + margins.top() + margins.bottom())
+        size += QSize(margins.left() + margins.right(), margins.top() + margins.bottom())
         return size
 
     def sizeHint(self) -> QSize:
         return self.minimum_size()
 
-    def setGeometry(self, a0: QRect):
-        self.setGeometry(a0)
-        # self.doLayout(a0, false)
+    def itemAt(self, index: int):
+        if index < len(self.item_list):
+            return self.item_list[index]
+        else:
+            return None
 
-    def doLayout(self, rect, test_only):
+    def setGeometry(self, a0: QRect):
+        QLayout.setGeometry(self, a0)
+        self.do_layout(a0, False)
+
+    def do_layout(self, rect, test_only):
         left, right, top, bottom = self.getContentsMargins()
         effective_rect = rect.adjusted(+left, +top, -right, - bottom)
         x = effective_rect.x()
@@ -83,3 +95,28 @@ class FlowLayout(QLayout):
             line_height = max(line_height, item.sizeHint().height())
 
         return y + line_height - rect.y() + bottom
+
+
+class CaptionedImage(QWidget):
+    def __init__(self, image, text='', width=None, height=None, scaled=True):
+        super().__init__()
+        holder = QLabel('hold')
+        pixmap = QPixmap(image)
+        if width is not None:
+            holder.setFixedWidth(width)
+        if height is not None:
+            holder.setFixedHeight(height)
+        if scaled:
+            holder.setPixmap(pixmap.scaled(holder.width(), holder.height(), Qt.KeepAspectRatio))
+        else:
+            holder.setPixmap(pixmap)
+
+        caption = QLabel(text)
+        caption.setFixedWidth(holder.width())
+        caption.setWordWrap(True)
+        caption.setAlignment(Qt.AlignCenter)
+
+        layout = QVBoxLayout()
+        self.setLayout(layout)
+        layout.addWidget(holder)
+        layout.addWidget(caption)
