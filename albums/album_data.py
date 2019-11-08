@@ -64,8 +64,8 @@ class AlbumCreator(QDialog):
         buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
         self.button_box = QDialogButtonBox(buttons)
         self.button_box.button(QDialogButtonBox.Ok).setEnabled(False)
+        self.button_box.rejected.connect(self.my_reject)
         self.button_box.accepted.connect(self.accept)
-        self.button_box.rejected.connect(self.reject)
 
         layout = QVBoxLayout()
         self.setLayout(layout)
@@ -91,3 +91,7 @@ class AlbumCreator(QDialog):
 
     def get_description(self):
         return self.description
+
+    def my_reject(self):
+        self.reject()
+        self.title.setText('')
