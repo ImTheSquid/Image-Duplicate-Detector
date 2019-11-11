@@ -6,6 +6,7 @@ import pickle
 from pathlib import Path
 
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QMouseEvent
 from PyQt5.QtWidgets import QWidget, QGroupBox, QHBoxLayout, QListWidget, QVBoxLayout, QLabel, QPushButton, QLineEdit, \
     QFileDialog, QScrollArea, QFrame
 
@@ -13,7 +14,7 @@ from os import listdir
 from os.path import join, isfile, isdir
 
 from albums.album_data import AlbumCreator, AlbumData
-from albums.layouts import FlowLayout, CaptionedImage
+from albums.layouts import FlowLayout, CaptionedImage, MouseFlowWidget
 
 
 def check_save_data():
@@ -41,8 +42,11 @@ class Albums(QWidget):
 
         self.import_flow = FlowLayout(self, 5, 5)
         self.sort_container = QVBoxLayout()
+        # Albums
         self.loaded_albums = []
         self.selected_album = None
+        # Mirror array for indexing files/folders selected using import_flow without casting issues
+        self.loaded_images = []
 
         # GUI
         self.album_list = QListWidget()
@@ -116,12 +120,11 @@ class Albums(QWidget):
         path_finder.addWidget(dialog)
         import_layout.addLayout(path_finder)
 
-        # Layout I am using
         # Contains the whole thing
         scroll_container = QVBoxLayout()
         # Contains FlowLayout
-        scroll_widget = QFrame()
-        scroll_widget.setLayout(self.import_flow)
+        scroll_widget = MouseFlowWidget(self.import_flow)
+        scroll_widget.mouse_down.connect(self.import_flow_mouse_down)
         # Actual scroll area and configuration
         scroll_area = QScrollArea()
         scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
@@ -236,17 +239,20 @@ class Albums(QWidget):
                 caption = CaptionedImage('albums/assets/folder.png', str(file), 150, 150)
                 dirs.append(caption)
             elif isfile(f) and f.lower().endswith(('.png', '.jpg', '.jpeg')):
-                caption = CaptionedImage(f, str(file), 150, 150)
+                caption = CaptionedImage(str(f), str(file), 150, 150)
                 photos.append(caption)
             else:
                 caption = CaptionedImage('albums/assets/unknownFile.png', str(file), 150, 150)
                 other_files.append(caption)
         for direct in dirs:
             layout.addWidget(direct)
+            self.loaded_images.append(direct)
         for photo in photos:
             layout.addWidget(photo)
+            self.loaded_images.append(photo)
         for other in other_files:
             layout.addWidget(other)
+            self.loaded_images.append(other)
 
     def update_path(self):
         # Turns text red if path is invalid
@@ -264,3 +270,13 @@ class Albums(QWidget):
 
     def go_up_dir(self):
         self.path.setText(str(Path(self.path.text()).parent))
+
+    # param: e[0]: QMouseEvent, e[1]: index of clicked widget
+    def import_flow_mouse_down(self, e: tuple):
+        index = e[1]
+        widget = self.import_flow.get_widgets()[index].widget()
+        print(self.loaded_images[index].get_label_name())
+        if widget.styleSheet() is '':
+            widget.setStyleSheet('background-color: #93b6ed')
+        else:
+            widget.setStyleSheet('')

@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLineEdit, QLabel, QDialogButt
 
 
 class AlbumData:
-    def __init__(self, title, description='', paths=None):
+    def __init__(self, title: str, description='', paths=None):
         if paths is None:
             paths = []
         self.title = title

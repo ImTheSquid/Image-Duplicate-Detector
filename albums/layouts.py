@@ -1,5 +1,5 @@
 from PyQt5.QtCore import QSize, QRect, Qt, QPoint, pyqtSignal
-from PyQt5.QtGui import QPixmap
+from PyQt5.QtGui import QPixmap, QMouseEvent
 from PyQt5.QtWidgets import QLayout, QSizePolicy, QWidget, QVBoxLayout, QLabel, QSpacerItem
 
 
@@ -108,10 +108,41 @@ class FlowLayout(QLayout):
         self.heightChanged.emit(new_height)
         return new_height
 
+    def get_widget_pos(self, index):
+        return self._item_list[index].geometry()
+
+    def get_widgets(self):
+        return self._item_list
+
+
+# This class tracks where the mouse clicks inside a FlowLayout
+class MouseFlowWidget(QWidget):
+
+    mouse_down = pyqtSignal(tuple)
+
+    def __init__(self, flow: FlowLayout):
+        super().__init__()
+        self.setMouseTracking(True)
+        self.flow = flow
+        self.setLayout(flow)
+
+    def mousePressEvent(self, a0: QMouseEvent) -> None:
+        self.mouse_down.emit((a0, self.calc_location(a0)))
+
+    def calc_location(self, mouse: QMouseEvent):
+        item_list = self.flow.get_widgets()
+        for item in item_list:
+            if item.geometry().contains(mouse.pos()):
+                return self.flow.get_widgets().index(item)
+        return None
+
 
 class CaptionedImage(QWidget):
     def __init__(self, image, text='', width=None, height=None, scaled=True):
         super().__init__()
+
+        self.path = image
+        self.text = text
 
         # Image
         holder = QLabel('hold')
@@ -138,3 +169,9 @@ class CaptionedImage(QWidget):
         self.setLayout(layout)
         layout.addWidget(holder)
         layout.addWidget(caption)
+
+    def get_image_path(self):
+        return self.path
+
+    def get_label_name(self):
+        return self.text
