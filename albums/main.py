@@ -1,12 +1,16 @@
 import os
+
 import appdirs
 import pickle
 
+from pathlib import Path
+
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QWidget, QGroupBox, QHBoxLayout, QListWidget, QVBoxLayout, QLabel, QPushButton
+from PyQt5.QtWidgets import QWidget, QGroupBox, QHBoxLayout, QListWidget, QVBoxLayout, QLabel, QPushButton, QLineEdit, \
+    QFileDialog, QScrollArea, QFrame
 
 from os import listdir
-from os.path import join, isfile
+from os.path import join, isfile, isdir
 
 from albums.album_data import AlbumCreator, AlbumData
 from albums.layouts import FlowLayout, CaptionedImage
@@ -35,6 +39,7 @@ class Albums(QWidget):
     def __init__(self):
         super().__init__()
 
+        self.import_flow = FlowLayout(self, 5, 5)
         self.sort_container = QVBoxLayout()
         self.loaded_albums = []
         self.selected_album = None
@@ -95,7 +100,38 @@ class Albums(QWidget):
 
         self.sort_container.addLayout(self.update_album_layout())
 
-        import_layout = FlowLayout(5, 5, 5)
+        import_layout = QVBoxLayout()
+        path_finder = QHBoxLayout()
+        self.go_up = QPushButton('↑')
+        self.go_up.clicked.connect(self.go_up_dir)
+        self.go_up.setMaximumWidth(25)
+        path_finder.addWidget(self.go_up)
+        self.path = QLineEdit()
+        self.path.setText(str(Path.home()))
+        self.update_path()
+        self.path.textChanged.connect(self.update_path)
+        path_finder.addWidget(self.path)
+        dialog = QPushButton('Choose...')
+        dialog.clicked.connect(self.choose_path)
+        path_finder.addWidget(dialog)
+        import_layout.addLayout(path_finder)
+
+        # Layout I am using
+        # Contains the whole thing
+        scroll_container = QVBoxLayout()
+        # Contains FlowLayout
+        scroll_widget = QFrame()
+        scroll_widget.setLayout(self.import_flow)
+        # Actual scroll area and configuration
+        scroll_area = QScrollArea()
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setWidget(scroll_widget)
+        # Add scroll widget to parent container
+        scroll_container.addWidget(scroll_area)
+
+        import_layout.addLayout(scroll_container)
         import_group.setLayout(import_layout)
 
         return main_layout
@@ -116,7 +152,7 @@ class Albums(QWidget):
             layout.addStretch()
             return layout
         else:
-            flow = FlowLayout(5, 5, 5)
+            flow = FlowLayout(self, 5, 5)
             for entry in self.selected_album.get_paths():
                 img = CaptionedImage(entry, entry.split('/')[-1], 100, 100, True)
                 flow.addWidget(img)
@@ -187,3 +223,44 @@ class Albums(QWidget):
                     widget.deleteLater()
                 else:
                     self.clear_layout(item.layout())
+
+    def fill_import(self, directory: str, layout: FlowLayout):
+        self.clear_layout(layout)
+        files = listdir(directory)
+        dirs = []
+        photos = []
+        other_files = []
+        for file in files:
+            f = join(directory, file)
+            if isdir(f):
+                caption = CaptionedImage('albums/assets/folder.png', str(file), 150, 150)
+                dirs.append(caption)
+            elif isfile(f) and f.lower().endswith(('.png', '.jpg', '.jpeg')):
+                caption = CaptionedImage(f, str(file), 150, 150)
+                photos.append(caption)
+            else:
+                caption = CaptionedImage('albums/assets/unknownFile.png', str(file), 150, 150)
+                other_files.append(caption)
+        for direct in dirs:
+            layout.addWidget(direct)
+        for photo in photos:
+            layout.addWidget(photo)
+        for other in other_files:
+            layout.addWidget(other)
+
+    def update_path(self):
+        # Turns text red if path is invalid
+        if isdir(self.path.text()):
+            self.path.setStyleSheet("color: #000000;")
+            self.fill_import(self.path.text(), self.import_flow)
+        else:
+            self.path.setStyleSheet("color: #FF0000")
+
+    # Open file dialog for choosing import path
+    def choose_path(self):
+        dialog = QFileDialog.getExistingDirectory(self, 'Open Directory', '/home')
+        if dialog:
+            self.path.setText(dialog)
+
+    def go_up_dir(self):
+        self.path.setText(str(Path(self.path.text()).parent))

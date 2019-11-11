@@ -1,6 +1,5 @@
 import os
 import shutil
-import platform
 
 from PIL import Image, ExifTags
 
@@ -19,9 +18,8 @@ def check_exists(new_dir, file):
     # Adds a slash onto the end of the dir to signify a directory
     if not new_dir[-1] == '/':
         new_dir += '/'
-    if platform.system() == 'Windows':
-        new_dir = new_dir.replace('/', '\\')
-
+    # Fixes slashes on Windows
+    new_dir = os.path.normpath(new_dir)
     # Makes directories and moves files
     os.makedirs(new_dir, exist_ok=True)
     shutil.move(file, new_dir + file.split('/')[-1])

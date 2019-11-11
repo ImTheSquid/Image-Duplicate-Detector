@@ -1,107 +1,124 @@
-from PyQt5.QtCore import QSize, QRect, Qt, QPoint
+from PyQt5.QtCore import QSize, QRect, Qt, QPoint, pyqtSignal
 from PyQt5.QtGui import QPixmap
-from PyQt5.QtWidgets import QLayout, QLayoutItem, QStyle, QSizePolicy, QWidget, QVBoxLayout, QLabel
+from PyQt5.QtWidgets import QLayout, QSizePolicy, QWidget, QVBoxLayout, QLabel, QSpacerItem
 
 
 class FlowLayout(QLayout):
+    """A QLayout that arranges its child widgets horizontally and
+    vertically.
 
-    def __init__(self, margin=0, v_spacing=0, h_spacing=0):
-        super().__init__()
-        self.setContentsMargins(margin, margin, margin, margin)
-        self.v_space = v_spacing
-        self.h_space = h_spacing
-        self.item_list = []
+    If enough horizontal space is available, it looks like an HBoxLayout,
+    but if enough space is lacking, it automatically wraps its children into
+    multiple rows.
+    """
+    heightChanged = pyqtSignal(int)
+
+    def __init__(self, parent=None, margin=0, spacing=-1):
+        super().__init__(parent)
+        if parent is not None:
+            self.setContentsMargins(margin, margin, margin, margin)
+        self.setSpacing(spacing)
+
+        self._item_list = []
 
     def __del__(self):
-        self.item_list.clear()
+        while self.count():
+            self.takeAt(0)
 
-    def addItem(self, a0: QLayoutItem):
-        self.item_list.append(a0)
+    def addItem(self, item):
+        self._item_list.append(item)
 
-    def clear_items(self):
-        self.item_list.clear()
+    def addSpacing(self, size):
+        self.addItem(QSpacerItem(size, 0, QSizePolicy.Fixed, QSizePolicy.Minimum))
 
-    def count(self) -> int:
-        return len(self.item_list)
+    def count(self):
+        return len(self._item_list)
 
-    def smart_spacing(self, pixel_metric):
-        if not self.parent():
-            return -1
-        elif self.parent().isWidgetType():
-            return self.parentWidget().style().pixelMetric(pixel_metric, None, self.parentWidget())
-        else:
-            return self.parent().spacing()
-        pass
+    def itemAt(self, index):
+        if 0 <= index < len(self._item_list):
+            return self._item_list[index]
+        return None
 
-    def horizontal_spacing(self):
-        if self.h_space >= 0:
-            return self.h_space
-        else:
-            return self.smart_spacing(QStyle.PM_LayoutHorizontalSpacing)
+    def takeAt(self, index):
+        if 0 <= index < len(self._item_list):
+            return self._item_list.pop(index)
+        return None
 
-    def vertical_spacing(self):
-        if self.v_space >= 0:
-            return self.v_space
-        else:
-            return self.smart_spacing(QStyle.PM_LayoutVerticalSpacing)
+    def expandingDirections(self):
+        return Qt.Orientations(Qt.Orientation(0))
 
-    def minimum_size(self) -> QSize:
+    def hasHeightForWidth(self):
+        return True
+
+    def heightForWidth(self, width):
+        height = self._do_layout(QRect(0, 0, width, 0), True)
+        return height
+
+    def setGeometry(self, rect):
+        super().setGeometry(rect)
+        self._do_layout(rect, False)
+
+    def sizeHint(self):
+        return self.minimumSize()
+
+    def minimumSize(self):
         size = QSize()
-        for item in self.item_list:
-            size = size.expandedTo(item.minimumSize())
 
-        margins = self.contentsMargins()
-        size += QSize(margins.left() + margins.right(), margins.top() + margins.bottom())
+        for item in self._item_list:
+            minsize = item.minimumSize()
+            extent = item.geometry().bottomRight()
+            size = size.expandedTo(QSize(minsize.width(), extent.y()))
+
+        margin = self.contentsMargins().left()
+        size += QSize(2 * margin, 2 * margin)
         return size
 
-    def sizeHint(self) -> QSize:
-        return self.minimum_size()
-
-    def itemAt(self, index: int):
-        if index < len(self.item_list):
-            return self.item_list[index]
-        else:
-            return None
-
-    def setGeometry(self, a0: QRect):
-        QLayout.setGeometry(self, a0)
-        self.do_layout(a0, False)
-
-    def do_layout(self, rect, test_only):
-        left, right, top, bottom = self.getContentsMargins()
-        effective_rect = rect.adjusted(+left, +top, -right, - bottom)
+    def _do_layout(self, rect, test_only=False):
+        m = self.contentsMargins()
+        effective_rect = rect.adjusted(+m.left(), +m.top(), -m.right(), -m.bottom())
         x = effective_rect.x()
         y = effective_rect.y()
         line_height = 0
-        for item in self.item_list:
+
+        for item in self._item_list:
             wid = item.widget()
-            space_X = self.horizontal_spacing()
-            if space_X == -1:
-                space_X = wid.style().layoutSpacing(QSizePolicy.PushButton, QSizePolicy.PushButton, Qt.Horizontal)
-            space_Y = self.vertical_spacing()
-            if space_Y == -1:
-                space_Y = wid.style().layoutSpacing(QSizePolicy.PushButton, QSizePolicy.PushButton, Qt.Vertical)
-            next_X = x + item.sizeHint().width() + space_X
-            if next_X - space_X > effective_rect.right() and line_height > 0:
+
+            space_x = self.spacing()
+            space_y = self.spacing()
+            if wid is not None:
+                space_x += wid.style().layoutSpacing(
+                    QSizePolicy.PushButton, QSizePolicy.PushButton, Qt.Horizontal)
+                space_y += wid.style().layoutSpacing(
+                    QSizePolicy.PushButton, QSizePolicy.PushButton, Qt.Vertical)
+
+            next_x = x + item.sizeHint().width() + space_x
+            if next_x - space_x > effective_rect.right() and line_height > 0:
                 x = effective_rect.x()
-                y += line_height + space_Y
-                next_X = x + item.sizeHint().width() + space_X
+                y = y + line_height + space_y
+                next_x = x + item.sizeHint().width() + space_x
                 line_height = 0
 
             if not test_only:
                 item.setGeometry(QRect(QPoint(x, y), item.sizeHint()))
 
-            x = next_X
+            x = next_x
             line_height = max(line_height, item.sizeHint().height())
 
-        return y + line_height - rect.y() + bottom
+        new_height = y + line_height - rect.y()
+        self.heightChanged.emit(new_height)
+        return new_height
 
 
 class CaptionedImage(QWidget):
     def __init__(self, image, text='', width=None, height=None, scaled=True):
         super().__init__()
+
+        # Image
         holder = QLabel('hold')
         pixmap = QPixmap(image)
+        holder.setAlignment(Qt.AlignCenter)
+
+        # Init sizes
         if width is not None:
             holder.setFixedWidth(width)
         if height is not None:
@@ -111,6 +128,7 @@ class CaptionedImage(QWidget):
         else:
             holder.setPixmap(pixmap)
 
+        # Image caption
         caption = QLabel(text)
         caption.setFixedWidth(holder.width())
         caption.setWordWrap(True)

@@ -170,14 +170,12 @@ class DuplicateFinder(QWidget):
         self.progress_bar.setValue(status[0])
         self.compare_prog.setValue(status[1])
 
-    @pyqtSlot()
     def open_folder(self):
         dialog = QFileDialog.getExistingDirectory(self, 'Open Directory', '/home')
         if dialog:
             self.text_box.setText(dialog)
             self.can_find_files()
 
-    @pyqtSlot()
     def open_duplicate_folder(self):
         dialog = QFileDialog.getExistingDirectory(self, 'Open Directory', '/home')
         if dialog:

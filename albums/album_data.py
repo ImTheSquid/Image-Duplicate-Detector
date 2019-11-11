@@ -54,11 +54,11 @@ class AlbumCreator(QDialog):
         self.setMinimumWidth(300)
         if edit:
             self.setWindowTitle('Album Edit Tool')
-            self.setWindowIcon(QIcon('albums/editAlbum.png'))
+            self.setWindowIcon(QIcon('albums/assets/editAlbum.png'))
             self.setWhatsThis('This is how you edit a current album.')
         else:
             self.setWhatsThis('This is how you create a new album.')
-            self.setWindowIcon(QIcon('albums/newAlbum.png'))
+            self.setWindowIcon(QIcon('albums/assets/newAlbum.png'))
             self.setWindowTitle('Album Creation Tool')
 
         buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
