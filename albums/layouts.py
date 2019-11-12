@@ -1,5 +1,5 @@
 from PyQt5.QtCore import QSize, QRect, Qt, QPoint, pyqtSignal
-from PyQt5.QtGui import QPixmap, QMouseEvent
+from PyQt5.QtGui import QPixmap, QMouseEvent, QResizeEvent
 from PyQt5.QtWidgets import QLayout, QSizePolicy, QWidget, QVBoxLayout, QLabel, QSpacerItem
 
 
@@ -119,6 +119,7 @@ class FlowLayout(QLayout):
 class MouseFlowWidget(QWidget):
 
     mouse_down = pyqtSignal(tuple)
+    resize = pyqtSignal(QSize)
 
     def __init__(self, flow: FlowLayout):
         super().__init__()
@@ -128,6 +129,9 @@ class MouseFlowWidget(QWidget):
 
     def mousePressEvent(self, a0: QMouseEvent) -> None:
         self.mouse_down.emit((a0, self.calc_location(a0)))
+
+    def resizeEvent(self, a0: QResizeEvent) -> None:
+        self.resize.emit(a0.size())
 
     def calc_location(self, mouse: QMouseEvent):
         item_list = self.flow.get_widgets()
@@ -169,6 +173,7 @@ class CaptionedImage(QWidget):
         self.setLayout(layout)
         layout.addWidget(holder)
         layout.addWidget(caption)
+        self.setToolTip(text)
 
     def get_image_path(self):
         return self.path

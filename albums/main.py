@@ -41,6 +41,7 @@ class Albums(QWidget):
         super().__init__()
 
         self.import_flow = FlowLayout(self, 5, 5)
+        self.scroll_widget = MouseFlowWidget(self.import_flow)
         self.sort_container = QVBoxLayout()
         # Albums
         self.loaded_albums = []
@@ -123,14 +124,14 @@ class Albums(QWidget):
         # Contains the whole thing
         scroll_container = QVBoxLayout()
         # Contains FlowLayout
-        scroll_widget = MouseFlowWidget(self.import_flow)
-        scroll_widget.mouse_down.connect(self.import_flow_mouse_down)
+        self.scroll_widget.mouse_down.connect(self.import_flow_mouse_down)
+        self.scroll_widget.resize.connect(self.import_resize)
         # Actual scroll area and configuration
         scroll_area = QScrollArea()
         scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll_area.setWidgetResizable(True)
-        scroll_area.setWidget(scroll_widget)
+        scroll_area.setWidget(self.scroll_widget)
         # Add scroll widget to parent container
         scroll_container.addWidget(scroll_area)
 
@@ -227,22 +228,27 @@ class Albums(QWidget):
                 else:
                     self.clear_layout(item.layout())
 
+    def import_resize(self, new_size):
+        pass
+
     def fill_import(self, directory: str, layout: FlowLayout):
         self.clear_layout(layout)
+        self.loaded_images.clear()
         files = listdir(directory)
         dirs = []
         photos = []
         other_files = []
+        width = self.scroll_widget.width()/4
         for file in files:
             f = join(directory, file)
             if isdir(f):
-                caption = CaptionedImage('albums/assets/folder.png', str(file), 150, 150)
+                caption = CaptionedImage('albums/assets/folder.png', str(file), width)
                 dirs.append(caption)
             elif isfile(f) and f.lower().endswith(('.png', '.jpg', '.jpeg')):
-                caption = CaptionedImage(str(f), str(file), 150, 150)
+                caption = CaptionedImage(str(f), str(file), width)
                 photos.append(caption)
             else:
-                caption = CaptionedImage('albums/assets/unknownFile.png', str(file), 150, 150)
+                caption = CaptionedImage('albums/assets/unknownFile.png', str(file), width)
                 other_files.append(caption)
         for direct in dirs:
             layout.addWidget(direct)
@@ -275,7 +281,6 @@ class Albums(QWidget):
     def import_flow_mouse_down(self, e: tuple):
         index = e[1]
         widget = self.import_flow.get_widgets()[index].widget()
-        print(self.loaded_images[index].get_label_name())
         if widget.styleSheet() is '':
             widget.setStyleSheet('background-color: #93b6ed')
         else:
