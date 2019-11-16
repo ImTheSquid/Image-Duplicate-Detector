@@ -119,6 +119,7 @@ class FlowLayout(QLayout):
 class MouseFlowWidget(QWidget):
 
     mouse_down = pyqtSignal(tuple)
+    double_click = pyqtSignal(tuple)
     resize = pyqtSignal(QSize)
 
     def __init__(self, flow: FlowLayout):
@@ -129,6 +130,9 @@ class MouseFlowWidget(QWidget):
 
     def mousePressEvent(self, a0: QMouseEvent) -> None:
         self.mouse_down.emit((a0, self.calc_location(a0)))
+
+    def mouseDoubleClickEvent(self, a0: QMouseEvent) -> None:
+        self.double_click.emit((a0, self.calc_location(a0)))
 
     def resizeEvent(self, a0: QResizeEvent) -> None:
         self.resize.emit(a0.size())
@@ -142,41 +146,48 @@ class MouseFlowWidget(QWidget):
 
 
 class CaptionedImage(QWidget):
-    def __init__(self, image, text='', width=None, height=None, scaled=True):
+    def __init__(self, file_type: str, image, text='', width=None, height=None, scaled=True):
         super().__init__()
 
+        self.file_type = file_type
         self.path = image
         self.text = text
 
         # Image
-        holder = QLabel('hold')
-        pixmap = QPixmap(image)
-        holder.setAlignment(Qt.AlignCenter)
+        self.holder = QLabel('hold')
+        self.pixmap = QPixmap(image)
+        self.holder.setAlignment(Qt.AlignCenter)
 
         # Init sizes
         if width is not None:
-            holder.setFixedWidth(width)
+            self.holder.setFixedWidth(width)
         if height is not None:
-            holder.setFixedHeight(height)
+            self.holder.setFixedHeight(height)
         if scaled:
-            holder.setPixmap(pixmap.scaled(holder.width(), holder.height(), Qt.KeepAspectRatio))
+            self.holder.setPixmap(self.pixmap.scaled(self.holder.width(), self.holder.height(), Qt.KeepAspectRatio))
         else:
-            holder.setPixmap(pixmap)
+            self.holder.setPixmap(self.pixmap)
 
         # Image caption
         caption = QLabel(text)
-        caption.setFixedWidth(holder.width())
+        caption.setFixedWidth(self.holder.width())
         caption.setWordWrap(True)
         caption.setAlignment(Qt.AlignCenter)
 
         layout = QVBoxLayout()
         self.setLayout(layout)
-        layout.addWidget(holder)
+        layout.addWidget(self.holder)
         layout.addWidget(caption)
         self.setToolTip(text)
 
-    def get_image_path(self):
+    def get_path(self):
         return self.path
 
-    def get_label_name(self):
+    def get_name(self):
         return self.text
+
+    def get_file_type(self):
+        return self.file_type
+
+    def setFixedWidth(self, w: int) -> None:
+        self.holder.setPixmap(self.pixmap.scaledToWidth(w))

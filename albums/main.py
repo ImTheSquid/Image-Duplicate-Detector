@@ -1,3 +1,4 @@
+import math
 import os
 
 import appdirs
@@ -6,9 +7,8 @@ import pickle
 from pathlib import Path
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QMouseEvent
 from PyQt5.QtWidgets import QWidget, QGroupBox, QHBoxLayout, QListWidget, QVBoxLayout, QLabel, QPushButton, QLineEdit, \
-    QFileDialog, QScrollArea, QFrame
+    QFileDialog, QScrollArea
 
 from os import listdir
 from os.path import join, isfile, isdir
@@ -35,11 +35,31 @@ def check_save_data():
         return loaded_albums
 
 
+# Tests to see if a certain key is in an array of CaptionedImages
+def test_names(arr, key: CaptionedImage):
+    label = key.get_name()
+    for cap in arr:
+        if label == cap.get_name():
+            return True
+    return False
+
+
+def get_index_from_name(target_arr, key: CaptionedImage):
+    for cap in range(len(target_arr)):
+        if target_arr[cap].get_name() == key.get_name():
+            return cap
+
+
 class Albums(QWidget):
 
     def __init__(self):
         super().__init__()
 
+        self.clear_selected = QPushButton('Clear Selected Items')
+        self.import_files = QPushButton('Import 0 Selected Items')
+        self.edit_album_button = QPushButton('Edit Album')
+        self.path = QLineEdit()
+        self.go_up = QPushButton('↑')
         self.import_flow = FlowLayout(self, 5, 5)
         self.scroll_widget = MouseFlowWidget(self.import_flow)
         self.sort_container = QVBoxLayout()
@@ -48,6 +68,8 @@ class Albums(QWidget):
         self.selected_album = None
         # Mirror array for indexing files/folders selected using import_flow without casting issues
         self.loaded_images = []
+        # Stores selected files and directories
+        self.selected_files = []
 
         # GUI
         self.album_list = QListWidget()
@@ -62,6 +84,8 @@ class Albums(QWidget):
         save.clicked.connect(self.save_albums)
         file_controls.addWidget(save)
         rescan = QPushButton('Rescan for Albums')
+        rescan.setToolTip('Scans for albums in the data directory ('
+                          + appdirs.user_data_dir('PhotoUtilities', 'JackHogan') + ')')
         rescan.clicked.connect(self.rescan_albums)
         file_controls.addWidget(rescan)
         import_album = QPushButton('Import')
@@ -70,6 +94,9 @@ class Albums(QWidget):
         export_album = QPushButton('Export')
         export_album.clicked.connect(self.export_fat)
         file_controls.addWidget(export_album)
+        recover_albums = QPushButton('Recover Albums')
+        recover_albums.setToolTip('Attempts rebuild of selected album using photos in the import directory')
+        file_controls.addWidget(recover_albums)
         main_layout.addWidget(file)
 
         self.setLayout(main_layout)
@@ -78,6 +105,8 @@ class Albums(QWidget):
         if save_data:
             self.loaded_albums = save_data
         self.update_list()
+
+        self.sort_container.addLayout(self.update_album_layout())
 
         self.show()
 
@@ -99,6 +128,11 @@ class Albums(QWidget):
         add_album = QPushButton('Add Album')
         add_album.clicked.connect(self.add_new_album)
         list_layout.addWidget(add_album)
+
+        self.edit_album_button.setEnabled(False)
+        self.edit_album_button.clicked.connect(self.edit_selected_album)
+        list_layout.addWidget(self.edit_album_button)
+
         list_layout.addWidget(self.remove_album_button)
         self.remove_album_button.setEnabled(False)
         album_group.setLayout(list_layout)
@@ -107,11 +141,9 @@ class Albums(QWidget):
 
         import_layout = QVBoxLayout()
         path_finder = QHBoxLayout()
-        self.go_up = QPushButton('↑')
         self.go_up.clicked.connect(self.go_up_dir)
         self.go_up.setMaximumWidth(25)
         path_finder.addWidget(self.go_up)
-        self.path = QLineEdit()
         self.path.setText(str(Path.home()))
         self.update_path()
         self.path.textChanged.connect(self.update_path)
@@ -125,6 +157,7 @@ class Albums(QWidget):
         scroll_container = QVBoxLayout()
         # Contains FlowLayout
         self.scroll_widget.mouse_down.connect(self.import_flow_mouse_down)
+        self.scroll_widget.double_click.connect(self.import_flow_double_click)
         self.scroll_widget.resize.connect(self.import_resize)
         # Actual scroll area and configuration
         scroll_area = QScrollArea()
@@ -136,11 +169,21 @@ class Albums(QWidget):
         scroll_container.addWidget(scroll_area)
 
         import_layout.addLayout(scroll_container)
+
+        self.import_files.setEnabled(False)
+        self.import_files.clicked.connect(self.import_selected_items)
+        import_layout.addWidget(self.import_files)
+
+        self.clear_selected.setEnabled(False)
+        self.clear_selected.clicked.connect(self.clear_selected_items)
+        import_layout.addWidget(self.clear_selected)
+
         import_group.setLayout(import_layout)
 
         return main_layout
 
     def update_album_layout(self):
+        self.clear_layout(self.sort_container)
         layout = QHBoxLayout()
         layout.addStretch()
         if self.selected_album is None:
@@ -158,17 +201,18 @@ class Albums(QWidget):
         else:
             flow = FlowLayout(self, 5, 5)
             for entry in self.selected_album.get_paths():
-                img = CaptionedImage(entry, entry.split('/')[-1], 100, 100, True)
+                img = CaptionedImage(entry, entry.split('/')[-1], 100)
                 flow.addWidget(img)
             return flow
 
     def update_list(self):
         self.album_list.clear()
         self.remove_album_button.setEnabled(False)
+        self.edit_album_button.setEnabled(False)
         for album in self.loaded_albums:
             self.album_list.addItem(album.get_title())
-        if self.selected_album is None and len(self.loaded_albums) > 0:
-            self.selected_album = self.loaded_albums[0]
+        self.selected_album = None
+        self.update_album_layout()
 
     def add_new_album(self):
         dialog = AlbumCreator()
@@ -184,14 +228,15 @@ class Albums(QWidget):
                 self.selected_album = album
                 break
         self.remove_album_button.setEnabled(True)
-        self.clear_layout(self.sort_container)
+        self.edit_album_button.setEnabled(True)
         self.sort_container.addLayout(self.update_album_layout())
+        self.update_import_button()
 
     def save_albums(self):
         main_data = appdirs.user_data_dir('PhotoUtilities', 'JackHogan')
         album_dir = join(main_data, 'albums')
         for album in self.loaded_albums:
-            pickle.dump(album, open(join(album_dir, album.get_title()+'.jalbum'), 'wb'), 4)
+            pickle.dump(album, open(join(album_dir, album.get_title() + '.jalbum'), 'wb'), 4)
 
     def rescan_albums(self):
         self.save_albums()
@@ -199,6 +244,7 @@ class Albums(QWidget):
         if save_data:
             self.loaded_albums = save_data
         self.update_list()
+        self.sort_container.addLayout(self.update_album_layout())
 
     def import_fat(self):
         pass
@@ -229,8 +275,14 @@ class Albums(QWidget):
                     self.clear_layout(item.layout())
 
     def import_resize(self, new_size):
-        pass
+        size = int(math.ceil(new_size.width() / 100.0)) * 100
+        widgets = []
+        for wid_item in self.import_flow.get_widgets():
+            widgets.append(wid_item.widget())
+        for w in widgets:
+            w.setFixedWidth(size / 6)
 
+    # Fills the import_flow FlowLayout with the current directory
     def fill_import(self, directory: str, layout: FlowLayout):
         self.clear_layout(layout)
         self.loaded_images.clear()
@@ -238,17 +290,17 @@ class Albums(QWidget):
         dirs = []
         photos = []
         other_files = []
-        width = self.scroll_widget.width()/4
+        width = self.scroll_widget.width() / 5
         for file in files:
             f = join(directory, file)
             if isdir(f):
-                caption = CaptionedImage('albums/assets/folder.png', str(file), width)
+                caption = CaptionedImage('FOLDER', 'albums/assets/folder.png', str(file), width)
                 dirs.append(caption)
             elif isfile(f) and f.lower().endswith(('.png', '.jpg', '.jpeg')):
-                caption = CaptionedImage(str(f), str(file), width)
+                caption = CaptionedImage('PHOTO', str(f), str(file), width)
                 photos.append(caption)
             else:
-                caption = CaptionedImage('albums/assets/unknownFile.png', str(file), width)
+                caption = CaptionedImage('UNKNOWN', 'albums/assets/unknownFile.png', str(file), width)
                 other_files.append(caption)
         for direct in dirs:
             layout.addWidget(direct)
@@ -259,6 +311,14 @@ class Albums(QWidget):
         for other in other_files:
             layout.addWidget(other)
             self.loaded_images.append(other)
+
+        # Highlight selected items
+        for index in range(len(self.loaded_images)):
+            widget = layout.get_widgets()[index].widget()
+            if test_names(self.selected_files, widget):
+                widget.setStyleSheet('background-color: #93b6ed')
+            else:
+                widget.setStyleSheet('')
 
     def update_path(self):
         # Turns text red if path is invalid
@@ -280,8 +340,58 @@ class Albums(QWidget):
     # param: e[0]: QMouseEvent, e[1]: index of clicked widget
     def import_flow_mouse_down(self, e: tuple):
         index = e[1]
-        widget = self.import_flow.get_widgets()[index].widget()
+        try:
+            widget = self.import_flow.get_widgets()[index].widget()
+        except TypeError:
+            return
         if widget.styleSheet() is '':
+            if self.loaded_images[index] not in self.selected_files:
+                self.selected_files.append(self.loaded_images[index])
             widget.setStyleSheet('background-color: #93b6ed')
         else:
+            if get_index_from_name(self.selected_files, self.loaded_images[index]) is not None:
+                self.selected_files.pop(get_index_from_name(self.selected_files, self.loaded_images[index]))
             widget.setStyleSheet('')
+        self.update_import_button()
+
+    def import_flow_double_click(self, e: tuple):
+        index = e[1]
+        try:
+            widget = self.loaded_images[index]
+        except TypeError:
+            return
+        if widget.get_file_type() is 'FOLDER':
+            self.path.setText(join(self.path.text(), widget.get_name()))
+            self.update_path()
+        if widget in self.selected_files:
+            self.selected_files.pop(self.selected_files.index(widget))
+        self.update_import_button()
+
+    def update_import_button(self):
+        self.import_files.setText('Import ' + str(len(self.selected_files)) + ' Selected '
+                                  + ('Item' if len(self.selected_files) == 1 else 'Items'))
+        self.clear_selected.setEnabled(len(self.selected_files) > 0)
+        self.import_files.setEnabled(len(self.selected_files) > 0 and self.selected_album is not None)
+
+    def clear_selected_items(self):
+        self.selected_files.clear()
+        self.update_import_button()
+        for wid in self.import_flow.get_widgets():
+            wid.widget().setStyleSheet('')
+
+    def edit_selected_album(self):
+        pass
+
+    def import_selected_items(self):
+        for file in self.selected_files:
+            if isdir(file.get_path()):
+                for filename in Path(file.get_path()).glob('**/*.*'):
+                    if filename.as_uri().lower().endswith(('.png', '.jpg', '.jpeg')):
+                        width = self.scroll_widget.width() / 5
+                        caption = CaptionedImage('PHOTO', str(filename), str(file.get_name()), width)
+                        self.selected_album.add_path(caption)
+            else:
+                if file.get_name().endswith(('.png', '.jpg', '.jpeg')):
+                    self.selected_album.add_path(file)
+        self.clear_selected_items()
+        self.sort_container.addLayout(self.update_album_layout())

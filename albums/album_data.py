@@ -4,6 +4,8 @@
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLineEdit, QLabel, QDialogButtonBox
 
+from albums.layouts import CaptionedImage
+
 
 class AlbumData:
     def __init__(self, title: str, description='', paths=None):
@@ -13,7 +15,7 @@ class AlbumData:
         self.paths = paths
         self.desc = description
 
-    def add_path(self, path):
+    def add_path(self, path: CaptionedImage):
         self.paths.append(path)
 
     def get_paths(self):
