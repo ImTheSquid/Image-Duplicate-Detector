@@ -8,15 +8,18 @@ from albums.layouts import CaptionedImage
 
 
 class AlbumData:
-    def __init__(self, title: str, description='', paths=None):
+    def __init__(self, title: str, description: str = '', paths: str = None):
         if paths is None:
             paths = []
         self.title = title
         self.paths = paths
         self.desc = description
 
-    def add_path(self, path: CaptionedImage):
+    def add_path(self, path: str):
         self.paths.append(path)
+
+    def remove_path(self, path: str):
+        self.paths.pop(self.paths.index(path))
 
     def get_paths(self):
         return self.paths
@@ -24,13 +27,19 @@ class AlbumData:
     def get_title(self):
         return self.title
 
+    def set_title(self, title: str):
+        self.title = title
+
     def get_description(self):
         return self.desc
+
+    def set_description(self, desc: str):
+        self.desc = desc
 
 
 # Stores raw image data to be used for transferring between systems
 class FatAlbumData:
-    def __init__(self, title, description='', images=None):
+    def __init__(self, title: str, description: str = '', images=None):
         if images is None:
             images = []
         self.title = title
@@ -51,17 +60,11 @@ class FatAlbumData:
 
 
 class AlbumCreator(QDialog):
-    def __init__(self, edit=False):
+    def __init__(self, album_list, edit: bool = False, current_album: AlbumData = None):
         super().__init__()
         self.setMinimumWidth(300)
-        if edit:
-            self.setWindowTitle('Album Edit Tool')
-            self.setWindowIcon(QIcon('albums/assets/editAlbum.png'))
-            self.setWhatsThis('This is how you edit a current album.')
-        else:
-            self.setWhatsThis('This is how you create a new album.')
-            self.setWindowIcon(QIcon('albums/assets/newAlbum.png'))
-            self.setWindowTitle('Album Creation Tool')
+        self.album_list = album_list
+        self.edit = edit
 
         buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
         self.button_box = QDialogButtonBox(buttons)
@@ -83,10 +86,23 @@ class AlbumCreator(QDialog):
         layout.addWidget(self.description)
         layout.addStretch()
         layout.addWidget(self.button_box)
+
+        if edit:
+            self.setWindowTitle('Album Edit Tool')
+            self.setWindowIcon(QIcon('albums/assets/editAlbum.png'))
+            self.setWhatsThis('This is how you edit a current album.')
+            self.title.setText(current_album.get_title())
+            self.description.setText(current_album.get_description())
+        else:
+            self.setWhatsThis('This is how you create a new album.')
+            self.setWindowIcon(QIcon('albums/assets/newAlbum.png'))
+            self.setWindowTitle('Album Creation Tool')
+
         self.exec()
 
     def check_text(self):
-        self.button_box.button(QDialogButtonBox.Ok).setEnabled(len(self.title.text()) > 0)
+        self.button_box.button(QDialogButtonBox.Ok).setEnabled(
+            len(self.title.text()) > 0 and len(self.description.text()) <= 300 and self.check_originality())
 
     def get_title(self):
         return self.title
@@ -96,4 +112,18 @@ class AlbumCreator(QDialog):
 
     def my_reject(self):
         self.reject()
-        self.title.setText('')
+        if not self.edit:
+            self.title.setText('')
+
+    # Returns true if name is original, false otherwise
+    def check_originality(self) -> bool:
+        titles = [f.get_title() for f in self.album_list]
+        print('ACTIVE')
+        print(titles)
+        if self.edit:
+            count = 0
+            for title in titles:
+                if title == self.title.text():
+                    count += 1
+            return count <= 1
+        return not self.title.text() in titles

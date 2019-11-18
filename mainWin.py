@@ -16,8 +16,8 @@ class Runner(QWidget):
 
     def init_gui(self):
         # Init the basic window frame
-        self.setWindowTitle('Jack\'s Photo Utilities v.1.8')
-        pix = QPixmap('icon.png')
+        self.setWindowTitle('Jack\'s Photo Utilities v.1.9')
+        pix = QPixmap('assets/icon.png')
         self.setWindowIcon(QIcon(pix))
         layout = QHBoxLayout()
         tabs = QTabWidget()
