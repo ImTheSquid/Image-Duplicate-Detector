@@ -6,6 +6,8 @@ import pickle
 
 from pathlib import Path
 
+from PIL import Image
+
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QWidget, QGroupBox, QHBoxLayout, QListWidget, QVBoxLayout, QLabel, QPushButton, QLineEdit, \
     QFileDialog, QScrollArea, QMessageBox
@@ -13,7 +15,7 @@ from PyQt5.QtWidgets import QWidget, QGroupBox, QHBoxLayout, QListWidget, QVBoxL
 from os import listdir
 from os.path import join, isfile, isdir, basename
 
-from albums.album_data import AlbumCreator, AlbumData
+from albums.album_data import AlbumCreator, AlbumData, FatAlbumData, FatPhoto
 from albums.layouts import FlowLayout, CaptionedImage, MouseFlowWidget
 
 
@@ -99,9 +101,10 @@ class Albums(QWidget):
         import_album = QPushButton('Import')
         import_album.clicked.connect(self.import_fat)
         file_controls.addWidget(import_album)
-        export_album = QPushButton('Export')
-        export_album.clicked.connect(self.export_fat)
-        file_controls.addWidget(export_album)
+        self.export_album = QPushButton('Export')
+        self.export_album.setEnabled(False)
+        self.export_album.clicked.connect(self.export_fat)
+        file_controls.addWidget(self.export_album)
         recover_albums = QPushButton('Recover Albums')
         recover_albums.setToolTip('Attempts rebuild of selected album using photos in the import directory')
         file_controls.addWidget(recover_albums)
@@ -229,14 +232,18 @@ class Albums(QWidget):
         for album in self.loaded_albums:
             self.album_list.addItem(album.get_title())
         self.selected_album = None
+        self.export_album.setEnabled(False)
         self.update_album_layout()
 
     # Creates a new album
-    def add_new_album(self):
-        dialog = AlbumCreator(self.loaded_albums, False)
-        if len(dialog.get_title().text()) == 0:
+    def add_new_album(self, title=None, description=''):
+        if not title:
+            dialog = AlbumCreator(self.loaded_albums, False)
+            title = dialog.get_title().text()
+            description = dialog.get_description().text()
+        if len(title) == 0:
             return
-        self.loaded_albums.append(AlbumData(dialog.get_title().text(), dialog.get_description().text()))
+        self.loaded_albums.append(AlbumData(title, description))
         self.refresh_list()
 
     # Gets the currently selected album from the list of albums
@@ -245,6 +252,7 @@ class Albums(QWidget):
         for album in self.loaded_albums:
             if album.get_title() == list_sel:
                 self.selected_album = album
+                self.export_album.setEnabled(True)
                 break
         self.remove_album_button.setEnabled(True)
         self.edit_album_button.setEnabled(True)
@@ -275,10 +283,42 @@ class Albums(QWidget):
         self.update_album_layout()
 
     def import_fat(self):
-        pass
+        album_loc = QFileDialog.getOpenFileName(self, 'Open Fat Album File', '/home', 'Fat Album Files (*.jfatalbum)',
+                                            'Fat Album Files (*.jfatalbum)')
+        if not album_loc:
+            return
+
+        # Specifies where new photos will be located
+        photo_loc = QFileDialog.getExistingDirectory(self, 'Select Extracted Photo Location (will be placed '
+                                                           'under file with album name)', '/home')
+        if not photo_loc:
+            return
+
+        # Load album into memory
+        album = pickle.load(open(album_loc[0], 'rb'))
+        if not isdir(join(photo_loc, album.get_title())):
+            os.makedirs(join(photo_loc, album.get_title()))
+        album_photos = album.get_images()
+        for album_photo in album_photos:
+            album_photo.get_image().save(join(photo_loc, album.get_title(), album_photo.get_name()),
+                                         album_photo.get_name().upper().split('.')[-1])
+
+        # Add album to list
+        self.add_new_album(album.get_title(), album.get_description())
+        new_album = self.loaded_albums[-1]
+        for photo in Path(join(photo_loc, album.get_title())).glob('*.*/**'):
+            caption = CaptionedImage('PHOTO', str(photo), basename(photo.as_posix()), 200)
+            new_album.add_path(caption.get_path())
 
     def export_fat(self):
-        pass
+        images = []
+        for cap_img in self.selected_album_mirror:
+            images.append(FatPhoto(Image.open(cap_img.get_path()), basename(cap_img.get_path())))
+        fat_data = FatAlbumData(self.selected_album.get_title(), self.selected_album.get_description(), images)
+
+        save_location = QFileDialog.getExistingDirectory(self, 'Choose an Export Directory', '/home')
+        if save_location:
+            pickle.dump(fat_data, open(join(save_location, fat_data.get_title() + '.jfatalbum'), 'wb'), 4)
 
     # Removes an album from the list and its file
     def remove_album(self):
@@ -395,6 +435,7 @@ class Albums(QWidget):
             widget.setStyleSheet('')
         self.update_import_button()
 
+    # Tracks clicks for album layout
     def album_flow_mouse_down(self, e: tuple):
         index = e[1]
         try:
@@ -486,6 +527,7 @@ class Albums(QWidget):
 
         self.selected_album_files.clear()
         self.update_remove_button()
-        self.ual()
+        self.update_album_layout()
         for wid in self.flow.get_widgets():
             wid.widget().setStyleSheet('')
+        self.remove_from_album.setEnabled(False)

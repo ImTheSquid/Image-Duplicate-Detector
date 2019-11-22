@@ -39,7 +39,7 @@ class AlbumData:
 
 # Stores raw image data to be used for transferring between systems
 class FatAlbumData:
-    def __init__(self, title: str, description: str = '', images=None):
+    def __init__(self, title: str, description: str = '', images: [] = None):
         if images is None:
             images = []
         self.title = title
@@ -57,6 +57,18 @@ class FatAlbumData:
 
     def get_description(self):
         return self.desc
+
+
+class FatPhoto:
+    def __init__(self, image, name: str):
+        self. image = image
+        self.name = name
+
+    def get_image(self):
+        return self.image
+
+    def get_name(self):
+        return self.name
 
 
 class AlbumCreator(QDialog):
