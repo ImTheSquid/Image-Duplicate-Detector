@@ -1,5 +1,5 @@
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QPixmap
+from PyQt5.QtGui import QPixmap, QImageReader
 from PyQt5.QtWidgets import QLabel, QDialog, QHBoxLayout, QVBoxLayout
 
 
@@ -17,7 +17,7 @@ class ImageCompare(QDialog):
         original_label.setAlignment(Qt.AlignCenter)
         original = QLabel('Original Image')
         original.setAlignment(Qt.AlignCenter)
-        pixel1 = QPixmap(original_path)
+        pixel1 = QPixmap(QImageReader(original_path).read())
         original.setPixmap(pixel1)
         img1.addWidget(original_label)
         img1.addWidget(original)
@@ -26,7 +26,7 @@ class ImageCompare(QDialog):
         duplicate_label.setAlignment(Qt.AlignCenter)
         duplicate = QLabel('Duplicate Image')
         duplicate.setAlignment(Qt.AlignCenter)
-        pixel2 = QPixmap(duplicate_path)
+        pixel2 = QPixmap(QImageReader(duplicate_path).read())
         duplicate.setPixmap(pixel2)
         img2.addWidget(duplicate_label)
         img2.addWidget(duplicate)

@@ -1,7 +1,7 @@
 import sys
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QIcon, QPixmap
+from PyQt5.QtGui import QIcon, QPixmap, QImageReader
 from PyQt5.QtWidgets import QApplication, QWidget, QTabWidget, QHBoxLayout
 
 from albums.main import Albums
@@ -17,7 +17,7 @@ class Runner(QWidget):
     def init_gui(self):
         # Init the basic window frame
         self.setWindowTitle('Jack\'s Photo Utilities v.1.9')
-        pix = QPixmap('assets/icon.png')
+        pix = QPixmap(QImageReader('assets/icon.png').read())
         self.setWindowIcon(QIcon(pix))
         layout = QHBoxLayout()
         tabs = QTabWidget()

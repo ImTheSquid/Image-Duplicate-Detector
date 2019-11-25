@@ -1,5 +1,5 @@
 from PyQt5.QtCore import QSize, QRect, Qt, QPoint, pyqtSignal
-from PyQt5.QtGui import QPixmap, QMouseEvent, QResizeEvent
+from PyQt5.QtGui import QPixmap, QMouseEvent, QResizeEvent, QImageReader
 from PyQt5.QtWidgets import QLayout, QSizePolicy, QWidget, QVBoxLayout, QLabel, QSpacerItem
 
 
@@ -146,16 +146,17 @@ class MouseFlowWidget(QWidget):
 
 
 class CaptionedImage(QWidget):
-    def __init__(self, file_type: str, image, text='', width=None, height=None, scaled=True):
+    def __init__(self, file_type: str, image, path: str, text='', width=None, height=None, scaled=True):
         super().__init__()
 
         self.file_type = file_type
-        self.path = image
+        self.image = image
+        self.path = path
         self.text = text
 
         # Image
         self.holder = QLabel('hold')
-        self.pixmap = QPixmap(image)
+        self.pixmap = QPixmap(QImageReader(image).read())
         self.holder.setAlignment(Qt.AlignCenter)
 
         # Init sizes
@@ -180,7 +181,10 @@ class CaptionedImage(QWidget):
         layout.addWidget(caption)
         self.setToolTip(text)
 
-    def get_path(self):
+    def get_image(self):
+        return self.image
+
+    def get_file_path(self):
         return self.path
 
     def get_name(self):

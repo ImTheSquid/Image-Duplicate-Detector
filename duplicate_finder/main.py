@@ -7,7 +7,7 @@ from datetime import datetime
 
 from pathlib import Path
 
-from PyQt5.QtGui import QIcon
+from PyQt5.QtGui import QIcon, QImageReader, QPixmap
 from PyQt5.QtWidgets import QWidget, QHBoxLayout, QGroupBox, QFileDialog, QVBoxLayout, QProgressBar, \
     QLabel, QLineEdit, QPushButton, QListWidget, QCheckBox
 from PyQt5.QtCore import pyqtSlot, QThreadPool, pyqtSignal
@@ -159,10 +159,7 @@ class DuplicateFinder(QWidget):
 
     def init_gui(self, layout):
         # Init the basic window frame
-        self.setWindowTitle('Duplicate Photo Detector v.1.5')
-        self.setWindowIcon(QIcon('../icon.png'))
         self.setLayout(layout)
-        self.show()
 
     def update_progress(self, status):
         self.compare_prog.setMinimum(status[0] + 1)

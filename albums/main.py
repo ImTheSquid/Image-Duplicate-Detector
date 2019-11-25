@@ -1,5 +1,6 @@
 import math
 import os
+import cv2
 
 import appdirs
 import pickle
@@ -15,7 +16,7 @@ from PyQt5.QtWidgets import QWidget, QGroupBox, QHBoxLayout, QListWidget, QVBoxL
 from os import listdir
 from os.path import join, isfile, isdir, basename
 
-from albums.album_data import AlbumCreator, AlbumData, FatAlbumData, FatPhoto
+from albums.album_data import AlbumCreator, AlbumData, FatAlbumData, FatPhoto, FatContentImporter
 from albums.layouts import FlowLayout, CaptionedImage, MouseFlowWidget
 
 
@@ -217,7 +218,7 @@ class Albums(QWidget):
         if self.selected_album is not None:
             self.album_desc.setText('Description: ' + self.selected_album.get_description())
             for entry in self.selected_album.get_paths():
-                img = CaptionedImage('PHOTO', entry, basename(entry), 100)
+                img = CaptionedImage('PHOTO', entry, entry, basename(entry), 100)
                 self.flow.addWidget(img)
                 self.selected_album_mirror.append(img)
 
@@ -235,16 +236,17 @@ class Albums(QWidget):
         self.export_album.setEnabled(False)
         self.update_album_layout()
 
-    # Creates a new album
-    def add_new_album(self, title=None, description=''):
-        if not title:
-            dialog = AlbumCreator(self.loaded_albums, False)
+    # Creates a new album, can be configured with a prefilled title and description
+    def add_new_album(self, title='', description='', override_dialog=False):
+        if not title or title == '' or override_dialog:
+            dialog = AlbumCreator(self.loaded_albums, False, None, title if title else '', description)
             title = dialog.get_title().text()
             description = dialog.get_description().text()
-        if len(title) == 0:
+        if not title or len(title) == 0:
             return
         self.loaded_albums.append(AlbumData(title, description))
         self.refresh_list()
+        return title, description
 
     # Gets the currently selected album from the list of albums
     def get_selected_item(self):
@@ -296,29 +298,27 @@ class Albums(QWidget):
 
         # Load album into memory
         album = pickle.load(open(album_loc[0], 'rb'))
-        if not isdir(join(photo_loc, album.get_title())):
-            os.makedirs(join(photo_loc, album.get_title()))
-        album_photos = album.get_images()
-        for album_photo in album_photos:
-            album_photo.get_image().save(join(photo_loc, album.get_title(), album_photo.get_name()),
-                                         album_photo.get_name().upper().split('.')[-1])
 
         # Add album to list
-        self.add_new_album(album.get_title(), album.get_description())
-        new_album = self.loaded_albums[-1]
-        for photo in Path(join(photo_loc, album.get_title())).glob('*.*/**'):
-            caption = CaptionedImage('PHOTO', str(photo), basename(photo.as_posix()), 200)
-            new_album.add_path(caption.get_path())
+        results = self.add_new_album(album.get_title(), album.get_description(), True)
+        album.set_title(results[0])
+        album.set_description(results[1])
+        self.selected_album = [f for f in self.loaded_albums if f.get_title() == album.get_title()][0]
+        FatContentImporter(album, photo_loc, self.selected_album)
+
+        QMessageBox.information(self, 'Import', 'Import completed successfully.')
 
     def export_fat(self):
         images = []
         for cap_img in self.selected_album_mirror:
-            images.append(FatPhoto(Image.open(cap_img.get_path()), basename(cap_img.get_path())))
+            images.append(FatPhoto(cv2.imread(cap_img.get_image()), basename(cap_img.get_image())))
         fat_data = FatAlbumData(self.selected_album.get_title(), self.selected_album.get_description(), images)
 
         save_location = QFileDialog.getExistingDirectory(self, 'Choose an Export Directory', '/home')
         if save_location:
             pickle.dump(fat_data, open(join(save_location, fat_data.get_title() + '.jfatalbum'), 'wb'), 4)
+
+        QMessageBox.information(self, 'Export', 'Export completed successfully.')
 
     # Removes an album from the list and its file
     def remove_album(self):
@@ -375,13 +375,13 @@ class Albums(QWidget):
         for file in files:
             f = join(directory, file)
             if isdir(f):
-                caption = CaptionedImage('FOLDER', 'assets/folder.png', str(file), width)
+                caption = CaptionedImage('FOLDER', 'assets/folder.png', str(f), str(file), width)
                 dirs.append(caption)
             elif isfile(f) and f.lower().endswith(('.png', '.jpg', '.jpeg')):
-                caption = CaptionedImage('PHOTO', str(f), str(file), width)
+                caption = CaptionedImage('PHOTO', str(f), str(f), str(file), width)
                 photos.append(caption)
             else:
-                caption = CaptionedImage('UNKNOWN', 'assets/unknownFile.png', str(file), width)
+                caption = CaptionedImage('UNKNOWN', 'assets/unknownFile.png', str(f), str(file), width)
                 other_files.append(caption)
         for direct in dirs:
             layout.addWidget(direct)
@@ -509,21 +509,21 @@ class Albums(QWidget):
 
     def import_selected_items(self):
         for file in self.selected_files:
-            if isdir(file.get_path()):
-                for filename in Path(file.get_path()).glob('**/*.*'):
-                    if filename.as_uri().lower().endswith(('.png', '.jpg', '.jpeg')):
-                        width = self.scroll_widget.width() / 5
-                        caption = CaptionedImage('PHOTO', str(filename), basename(file.get_name()), width)
-                        self.selected_album.add_path(caption.get_path())
+            if isdir(file.get_file_path()):
+                for filename in Path(file.get_file_path()).glob('**/*.*'):
+                    if filename.as_uri().lower().endswith(('.png', '.jpg', '.jpeg')) and \
+                            str(filename) not in self.selected_album.get_paths():
+                        self.selected_album.add_path(str(filename))
             else:
-                if file.get_name().endswith(('.png', '.jpg', '.jpeg')):
-                    self.selected_album.add_path(file.get_path())
+                if file.get_name().endswith(('.png', '.jpg', '.jpeg')) and \
+                        str(file.get_file_path()) not in self.selected_album.get_paths():
+                    self.selected_album.add_path(file.get_image())
         self.clear_selected_items()
         self.update_album_layout()
 
     def remove_selected_album_items(self):
         for image in self.selected_album_files:
-            self.selected_album.remove_path(image.get_path())
+            self.selected_album.remove_path(image.get_image())
 
         self.selected_album_files.clear()
         self.update_remove_button()
