@@ -146,7 +146,7 @@ class MouseFlowWidget(QWidget):
 
 
 class CaptionedImage(QWidget):
-    def __init__(self, file_type: str, image, path: str, text='', width=None, height=None, scaled=True):
+    def __init__(self, file_type: str, image, path: str, text='', width=None, height=None, scaled=True, error=False):
         super().__init__()
 
         self.file_type = file_type
@@ -171,6 +171,8 @@ class CaptionedImage(QWidget):
 
         # Image caption
         caption = QLabel(text)
+        if error:
+            caption.setStyleSheet('color: #FF0000')
         caption.setFixedWidth(self.holder.width())
         caption.setWordWrap(True)
         caption.setAlignment(Qt.AlignCenter)

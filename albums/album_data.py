@@ -1,9 +1,9 @@
-import cv2
-
+import pickle
 from os import makedirs, listdir
 from os.path import join, isdir, basename
 from pathlib import Path
 
+import cv2
 from PyQt5.QtCore import Qt, QThreadPool, pyqtSignal
 from PyQt5.QtGui import QIcon, QImageReader, QPixmap
 from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLineEdit, QLabel, QDialogButtonBox, QProgressBar
@@ -115,7 +115,7 @@ class AlbumCreator(QDialog):
 
         if edit:
             self.setWindowTitle('Album Edit Tool')
-            self.setWindowIcon(QIcon(QPixmap(QImageReader('assets/editAlbum.png')).read()))
+            self.setWindowIcon(QIcon(QPixmap(QImageReader('assets/editAlbum.png').read())))
             self.title.setText(current_album.get_title())
             self.description.setText(current_album.get_description())
         else:
@@ -157,8 +157,8 @@ class AlbumCreator(QDialog):
 class FatContentImporter(QDialog):
     progress_signal = pyqtSignal(tuple)
 
-    def __init__(self, album: FatAlbumData, photo_destination: str, dest_album: AlbumData):
-        super().__init__()
+    def __init__(self, parent, album: FatAlbumData, photo_destination: str, dest_album: AlbumData):
+        super().__init__(parent)
         self.setWindowFlag(Qt.WindowCloseButtonHint, False)
         self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
         self.setWindowTitle('Album Content Importer')
@@ -179,7 +179,6 @@ class FatContentImporter(QDialog):
         self.progress_signal.connect(self.update_progress)
         self.thread_pool = QThreadPool()
         self.thread_worker = Worker(self.run)
-        self.thread_worker.setAutoDelete(False)
         self.thread_worker.signals.progress.connect(self.progress_signal)
         self.thread_worker.signals.finished.connect(self.update_after_completion)
 
@@ -220,3 +219,114 @@ class FatContentImporter(QDialog):
         for photo in files:
             signal.emit(('IMPORTING', files.index(photo), basename(photo.as_posix())))
             self.dest_album.add_path(str(photo))
+
+
+class FatContentExporter(QDialog):
+    progress_signal = pyqtSignal(tuple)
+
+    def __init__(self, parent, dest_dir: str, selected_album: AlbumData, images: []):
+        super().__init__(parent)
+        self.setWindowFlag(Qt.WindowCloseButtonHint, False)
+        self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
+        self.setWindowTitle('Album Content Exporter')
+        # TODO Add export album content icon
+        # self.setWindowIcon(QIcon(QPixmap(QImageReader('assets/importAlbumContent.png').read())))
+
+        # Layout setup
+        layout = QVBoxLayout()
+        layout.addWidget(QLabel('Exporting album files...'))
+        self.progress = QProgressBar()
+        self.progress.setValue(0)
+        self.progress.setFormat('Waiting (%p%)')
+        layout.addWidget(self.progress)
+        self.current_file = QLabel('Waiting...')
+        layout.addWidget(self.current_file)
+        layout.addStretch()
+
+        # Init thread
+        self.progress_signal.connect(self.update_progress)
+        self.thread_pool = QThreadPool()
+        self.thread_worker = Worker(self.run)
+        self.thread_worker.signals.progress.connect(self.progress_signal)
+        self.thread_worker.signals.finished.connect(self.update_after_completion)
+
+        self.images = images
+        self.selected_album = selected_album
+        self.dest_dir = dest_dir
+
+        self.setLayout(layout)
+        self.setFixedSize(300, 80)
+        self.thread_pool.start(self.thread_worker)
+        self.exec()
+
+    def update_after_completion(self):
+        self.hide()
+
+    def update_progress(self, status: tuple):
+        if status[0] is 'COLLECTING':
+            self.progress.setFormat('Collecting (%p%)')
+        else:
+            self.progress.setFormat('Saving (%p%)')
+        self.progress.setValue(status[1] + 1)
+        self.current_file.setText(status[2])
+
+    def run(self, signal):
+        self.progress.setMaximum(len(self.images) - 1)
+        images = []
+        for cap_img in self.images:
+            images.append(FatPhoto(cv2.imread(cap_img.get_image(), cv2.IMREAD_UNCHANGED),
+                                   basename(cap_img.get_image())))
+            signal.emit(('COLLECTING', self.images.index(cap_img)))
+        fat_data = FatAlbumData(self.selected_album.get_title(), self.selected_album.get_description(), images)
+
+        signal.emit('SAVING', 0)
+        self.progress.setMaximum(1)
+        pickle.dump(fat_data, open(join(self.dest_dir, fat_data.get_title() + '.jfatalbum'), 'wb'), 4)
+        signal.emit('SAVING', 1)
+
+
+class AlbumRecovery(QDialog):
+    progress_signal = pyqtSignal(tuple)
+
+    def __init__(self, parent, album: AlbumData, recovery_dir: str):
+        super().__init__(parent)
+        self.setWindowFlag(Qt.WindowCloseButtonHint, False)
+        self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
+        self.setWindowTitle('Album Content Recovery')
+        # TODO Add album recovery icon
+        # self.setWindowIcon(QIcon(QPixmap(QImageReader('assets/importAlbumContent.png').read())))
+
+        self.album = album
+        self.recovery_dir = recovery_dir
+
+        # Init thread
+        self.progress_signal.connect(self.update_progress)
+        self.thread_pool = QThreadPool()
+        self.thread_worker = Worker(self.run)
+        self.thread_worker.signals.progress.connect(self.progress_signal)
+        self.thread_worker.signals.finished.connect(self.update_after_completion)
+
+        # Layout setup
+        layout = QVBoxLayout()
+        layout.addWidget(QLabel('Recovering album files...'))
+        self.progress = QProgressBar()
+        self.progress.setValue(0)
+        self.progress.setFormat('Waiting (%p%)')
+        layout.addWidget(self.progress)
+        self.current_file = QLabel('Waiting...')
+        layout.addWidget(self.current_file)
+        layout.addStretch()
+
+        self.setLayout(layout)
+        self.setFixedSize(300, 80)
+        self.thread_pool.start(self.thread_worker)
+        self.exec()
+
+    def update_after_completion(self):
+        self.hide()
+
+    def update_progress(self, status: tuple):
+        pass
+
+    def run(self, signal):
+        pass

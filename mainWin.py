@@ -1,8 +1,7 @@
 import sys
 
-from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon, QPixmap, QImageReader
-from PyQt5.QtWidgets import QApplication, QWidget, QTabWidget, QHBoxLayout
+from PyQt5.QtWidgets import QApplication, QWidget, QTabWidget, QHBoxLayout, QDialog
 
 from albums.main import Albums
 from date_sorter.main import DateSorter
@@ -30,6 +29,13 @@ class Runner(QWidget):
         layout.addWidget(tabs)
         self.setLayout(layout)
         self.show()
+
+
+class StartupWindow(QDialog):
+    # TODO Add startup window as a launchpad
+    # TODO Save choices about this window in JSON file
+    def __init__(self):
+        super().__init__()
 
 
 if __name__ == '__main__':

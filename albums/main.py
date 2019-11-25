@@ -1,22 +1,17 @@
 import math
 import os
-import cv2
-
-import appdirs
 import pickle
-
+import webbrowser
+from os import listdir
+from os.path import join, isfile, isdir, basename
 from pathlib import Path
 
-from PIL import Image
-
+import appdirs
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QWidget, QGroupBox, QHBoxLayout, QListWidget, QVBoxLayout, QLabel, QPushButton, QLineEdit, \
     QFileDialog, QScrollArea, QMessageBox
 
-from os import listdir
-from os.path import join, isfile, isdir, basename
-
-from albums.album_data import AlbumCreator, AlbumData, FatAlbumData, FatPhoto, FatContentImporter
+from albums.album_data import AlbumCreator, AlbumData, FatContentImporter, FatContentExporter
 from albums.layouts import FlowLayout, CaptionedImage, MouseFlowWidget
 
 
@@ -106,17 +101,28 @@ class Albums(QWidget):
         self.export_album.setEnabled(False)
         self.export_album.clicked.connect(self.export_fat)
         file_controls.addWidget(self.export_album)
-        recover_albums = QPushButton('Recover Albums')
-        recover_albums.setToolTip('Attempts rebuild of selected album using photos in the import directory')
-        file_controls.addWidget(recover_albums)
+        self.recover_album = QPushButton('Recover Album')
+        self.recover_album.setToolTip('Attempts rebuild of selected album using a selected album')
+        self.recover_album.clicked.connect(self.recover_current_album)
+        self.recover_album.setEnabled(False)
+        file_controls.addWidget(self.recover_album)
         main_layout.addWidget(file)
 
         # Album management layout
         self.container = QVBoxLayout()
         self.flow = FlowLayout(self.container.parent(), 1, 1)
+
+        # Remove all selected items from album
         self.remove_from_album = QPushButton('Remove Selected From Album')
         self.remove_from_album.setEnabled(False)
         self.remove_from_album.clicked.connect(self.remove_selected_album_items)
+
+        # Only can be used when 1 item is selected
+        self.open_path = QPushButton('Open Path')
+        self.open_path.clicked.connect(self.open_selected_path)
+        self.open_path.setEnabled(False)
+
+        # Photo viewer
         album_widget = MouseFlowWidget(self.flow)
         album_widget.mouse_down.connect(self.album_flow_mouse_down)
         album_widget.setLayout(self.flow)
@@ -126,6 +132,7 @@ class Albums(QWidget):
         album_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         album_scroll.setWidgetResizable(True)
         self.container.addWidget(album_scroll)
+        self.container.addWidget(self.open_path)
         self.container.addWidget(self.remove_from_album)
 
         self.setLayout(main_layout)
@@ -218,7 +225,11 @@ class Albums(QWidget):
         if self.selected_album is not None:
             self.album_desc.setText('Description: ' + self.selected_album.get_description())
             for entry in self.selected_album.get_paths():
-                img = CaptionedImage('PHOTO', entry, entry, basename(entry), 100)
+                if isfile(entry):
+                    img = CaptionedImage('PHOTO', entry, entry, basename(entry), 100)
+                else:
+                    img = CaptionedImage('PHOTO', 'assets/errorFindingFile.png', 'NULL', basename(entry), 100, None,
+                                         True, True)
                 self.flow.addWidget(img)
                 self.selected_album_mirror.append(img)
 
@@ -234,6 +245,7 @@ class Albums(QWidget):
             self.album_list.addItem(album.get_title())
         self.selected_album = None
         self.export_album.setEnabled(False)
+        self.recover_album.setEnabled(False)
         self.update_album_layout()
 
     # Creates a new album, can be configured with a prefilled title and description
@@ -255,6 +267,7 @@ class Albums(QWidget):
             if album.get_title() == list_sel:
                 self.selected_album = album
                 self.export_album.setEnabled(True)
+                self.recover_album.setEnabled(True)
                 break
         self.remove_album_button.setEnabled(True)
         self.edit_album_button.setEnabled(True)
@@ -286,7 +299,7 @@ class Albums(QWidget):
 
     def import_fat(self):
         album_loc = QFileDialog.getOpenFileName(self, 'Open Fat Album File', '/home', 'Fat Album Files (*.jfatalbum)',
-                                            'Fat Album Files (*.jfatalbum)')
+                                                'Fat Album Files (*.jfatalbum)')
         if not album_loc:
             return
 
@@ -304,19 +317,16 @@ class Albums(QWidget):
         album.set_title(results[0])
         album.set_description(results[1])
         self.selected_album = [f for f in self.loaded_albums if f.get_title() == album.get_title()][0]
-        FatContentImporter(album, photo_loc, self.selected_album)
+        FatContentImporter(self, album, photo_loc, self.selected_album)
 
         QMessageBox.information(self, 'Import', 'Import completed successfully.')
 
     def export_fat(self):
-        images = []
-        for cap_img in self.selected_album_mirror:
-            images.append(FatPhoto(cv2.imread(cap_img.get_image()), basename(cap_img.get_image())))
-        fat_data = FatAlbumData(self.selected_album.get_title(), self.selected_album.get_description(), images)
-
         save_location = QFileDialog.getExistingDirectory(self, 'Choose an Export Directory', '/home')
-        if save_location:
-            pickle.dump(fat_data, open(join(save_location, fat_data.get_title() + '.jfatalbum'), 'wb'), 4)
+        if not save_location:
+            return
+
+        FatContentExporter(self, save_location, self.selected_album, self.selected_album_mirror)
 
         QMessageBox.information(self, 'Export', 'Export completed successfully.')
 
@@ -404,7 +414,7 @@ class Albums(QWidget):
     def update_path(self):
         # Turns text red if path is invalid
         if isdir(self.path.text()):
-            self.path.setStyleSheet("color: #000000;")
+            self.path.setStyleSheet("color: #000000")
             self.fill_import(self.path.text(), self.import_flow)
         else:
             self.path.setStyleSheet("color: #FF0000")
@@ -451,7 +461,7 @@ class Albums(QWidget):
             if index_name is not None:
                 self.selected_album_files.pop(index_name)
             widget.setStyleSheet('')
-        self.update_remove_button()
+        self.update_album_view_buttons()
 
     def import_flow_double_click(self, e: tuple):
         index = e[1]
@@ -479,9 +489,12 @@ class Albums(QWidget):
         self.clear_selected.setEnabled(len(self.selected_files) > 0)
         self.import_files.setEnabled(len(self.selected_files) > 0 and self.selected_album is not None)
 
-    def update_remove_button(self):
+    def update_album_view_buttons(self):
         self.remove_from_album.setEnabled(
             len([f for f in self.flow.get_widgets() if not f.widget().styleSheet() is '']) > 0)
+
+        # Only enable when 1 item is selected
+        self.open_path.setEnabled(len([f for f in self.flow.get_widgets() if not f.widget().styleSheet() is '']) == 1)
 
     def clear_selected_items(self):
         self.selected_files.clear()
@@ -526,8 +539,19 @@ class Albums(QWidget):
             self.selected_album.remove_path(image.get_image())
 
         self.selected_album_files.clear()
-        self.update_remove_button()
+        self.update_album_view_buttons()
         self.update_album_layout()
         for wid in self.flow.get_widgets():
             wid.widget().setStyleSheet('')
         self.remove_from_album.setEnabled(False)
+
+    def open_selected_path(self):
+        if len(self.selected_album_files) > 1:
+            return
+        # Opens parent directory in system's file explorer
+        webbrowser.open('file://' + str(Path(self.selected_album_files[0].get_file_path()).parent))
+
+    def recover_current_album(self):
+        search_dir = QFileDialog.getExistingDirectory(self, 'Open Directory', '/home')
+        if not search_dir:
+            return
