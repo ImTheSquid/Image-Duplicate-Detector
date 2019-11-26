@@ -11,7 +11,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QWidget, QGroupBox, QHBoxLayout, QListWidget, QVBoxLayout, QLabel, QPushButton, QLineEdit, \
     QFileDialog, QScrollArea, QMessageBox
 
-from albums.album_data import AlbumCreator, AlbumData, FatContentImporter, FatContentExporter
+from albums.album_data import AlbumCreator, AlbumData, FatContentImporter, FatContentExporter, AlbumRecovery
 from albums.layouts import FlowLayout, CaptionedImage, MouseFlowWidget
 
 
@@ -251,7 +251,7 @@ class Albums(QWidget):
     # Creates a new album, can be configured with a prefilled title and description
     def add_new_album(self, title='', description='', override_dialog=False):
         if not title or title == '' or override_dialog:
-            dialog = AlbumCreator(self.loaded_albums, False, None, title if title else '', description)
+            dialog = AlbumCreator(self, self.loaded_albums, False, None, title if title else '', description)
             title = dialog.get_title().text()
             description = dialog.get_description().text()
         if not title or len(title) == 0:
@@ -514,7 +514,7 @@ class Albums(QWidget):
         if self.selected_album.get_title() + '.jalbum' in album_files:
             os.remove(join(album_dir, original_file_name + '.jalbum'))
 
-        edited = AlbumCreator(self.loaded_albums, True, self.selected_album)
+        edited = AlbumCreator(self, self.loaded_albums, True, self.selected_album)
         self.selected_album.set_title(edited.get_title().text())
         self.selected_album.set_description(edited.get_description().text())
         self.refresh_list()
@@ -523,7 +523,7 @@ class Albums(QWidget):
     def import_selected_items(self):
         for file in self.selected_files:
             if isdir(file.get_file_path()):
-                for filename in Path(file.get_file_path()).glob('**/*.*'):
+                for filename in Path(file.get_file_path()).rglob('**/*.*'):
                     if filename.as_uri().lower().endswith(('.png', '.jpg', '.jpeg')) and \
                             str(filename) not in self.selected_album.get_paths():
                         self.selected_album.add_path(str(filename))
@@ -555,3 +555,5 @@ class Albums(QWidget):
         search_dir = QFileDialog.getExistingDirectory(self, 'Open Directory', '/home')
         if not search_dir:
             return
+
+        AlbumRecovery(self, self.selected_album, search_dir)

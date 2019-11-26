@@ -8,6 +8,7 @@ from PyQt5.QtCore import Qt, QThreadPool, pyqtSignal
 from PyQt5.QtGui import QIcon, QImageReader, QPixmap
 from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLineEdit, QLabel, QDialogButtonBox, QProgressBar
 
+from albums.layouts import FlowLayout
 from worker import Worker
 
 
@@ -19,8 +20,12 @@ class AlbumData:
         self.paths = paths
         self.desc = description
 
+        self.hashes = {}
+
     def add_path(self, path: str):
         self.paths.append(path)
+        self.hashes[path] = cv2.cvtColor(cv2.imread(path, cv2.IMREAD_UNCHANGED), cv2.COLOR_BGRA2GRAY)
+        # TODO Add some sort of hashing for recovery purposes (maybe like dupe sorter's)
 
     def remove_path(self, path: str):
         self.paths.pop(self.paths.index(path))
@@ -82,9 +87,9 @@ class FatPhoto:
 
 
 class AlbumCreator(QDialog):
-    def __init__(self, album_list, edit: bool = False, current_album: AlbumData = None,
+    def __init__(self, parent, album_list, edit: bool = False, current_album: AlbumData = None,
                  prefill_title: str = '', prefill_desc: str = ''):
-        super().__init__()
+        super().__init__(parent)
         self.setMinimumWidth(300)
         self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
         self.album_list = album_list
@@ -213,7 +218,7 @@ class FatContentImporter(QDialog):
             cv2.imwrite(join(self.photo_loc, self.album.get_title(), album_photo.get_name()), album_photo.get_image())
             signal.emit(('SAVING', self.album_photos.index(album_photo), album_photo.get_name()))
 
-        files = [f for f in Path(join(self.photo_loc, self.album.get_title())).glob('**/*.*')
+        files = [f for f in Path(join(self.photo_loc, self.album.get_title())).rglob('**/*.*')
                  if basename(f.as_posix()) in listdir(join(self.photo_loc, self.album.get_title()))]
 
         for photo in files:
@@ -229,8 +234,7 @@ class FatContentExporter(QDialog):
         self.setWindowFlag(Qt.WindowCloseButtonHint, False)
         self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
         self.setWindowTitle('Album Content Exporter')
-        # TODO Add export album content icon
-        # self.setWindowIcon(QIcon(QPixmap(QImageReader('assets/importAlbumContent.png').read())))
+        self.setWindowIcon(QIcon(QPixmap(QImageReader('assets/exportAlbumContent.png').read())))
 
         # Layout setup
         layout = QVBoxLayout()
@@ -276,13 +280,13 @@ class FatContentExporter(QDialog):
         for cap_img in self.images:
             images.append(FatPhoto(cv2.imread(cap_img.get_image(), cv2.IMREAD_UNCHANGED),
                                    basename(cap_img.get_image())))
-            signal.emit(('COLLECTING', self.images.index(cap_img)))
+            signal.emit(('COLLECTING', self.images.index(cap_img), cap_img.get_name()))
         fat_data = FatAlbumData(self.selected_album.get_title(), self.selected_album.get_description(), images)
 
-        signal.emit('SAVING', 0)
+        signal.emit(('SAVING', 0, fat_data.get_title() + '.jfatalbum'))
         self.progress.setMaximum(1)
         pickle.dump(fat_data, open(join(self.dest_dir, fat_data.get_title() + '.jfatalbum'), 'wb'), 4)
-        signal.emit('SAVING', 1)
+        signal.emit(('SAVING', 1, fat_data.get_title() + '.jfatalbum'))
 
 
 class AlbumRecovery(QDialog):
@@ -293,8 +297,7 @@ class AlbumRecovery(QDialog):
         self.setWindowFlag(Qt.WindowCloseButtonHint, False)
         self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
         self.setWindowTitle('Album Content Recovery')
-        # TODO Add album recovery icon
-        # self.setWindowIcon(QIcon(QPixmap(QImageReader('assets/importAlbumContent.png').read())))
+        self.setWindowIcon(QIcon(QPixmap(QImageReader('assets/recoverAlbumContent.png').read())))
 
         self.album = album
         self.recovery_dir = recovery_dir
@@ -326,7 +329,30 @@ class AlbumRecovery(QDialog):
         self.hide()
 
     def update_progress(self, status: tuple):
-        pass
+        # Indexing missing files or finding them
+        if status[0] is 'INDEX':
+            self.progress.setFormat('Indexing (%p%)')
+        else:
+            self.progress.setFormat('Locating (%p%)')
+        self.progress.setValue(status[1] + 1)
+        self.current_file.setText(status[2])
 
     def run(self, signal):
-        pass
+        files = [f for f in Path(self.recovery_dir).rglob("**/*.*") if f.as_uri().endswith(('.png', '.jpg', '.jpeg'))]
+        self.progress.setMaximum(len(files))
+
+
+class AlbumDataLoader(QDialog):
+    progress_signal = pyqtSignal(tuple)
+
+    def __init__(self, parent, src_album: AlbumData, dest_layout: FlowLayout, dest_mirror: []):
+        super().__init__(parent)
+        self.dest_mirror = dest_mirror
+        self.dest_layout = dest_layout
+        self.src_album = src_album
+
+
+# Imports selected items from import area
+class NewDataImporter(QDialog):
+    def __init__(self, parent):
+        super().__init__(parent)

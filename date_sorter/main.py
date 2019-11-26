@@ -1,13 +1,10 @@
 import os
 import shutil
-
-from PIL import Image, ExifTags
-
 from datetime import datetime
-
 from pathlib import Path
 
-from PyQt5.QtCore import pyqtSignal, QThreadPool, pyqtSlot
+from PIL import Image, ExifTags
+from PyQt5.QtCore import pyqtSignal, QThreadPool
 from PyQt5.QtWidgets import QWidget, QGroupBox, QVBoxLayout, QProgressBar, QLabel, QHBoxLayout, QLineEdit, \
     QFileDialog, QRadioButton, QPushButton
 
@@ -116,14 +113,12 @@ class DateSorter(QWidget):
             self.start.setEnabled(False)
             self.progress_bar.setFormat('Waiting (%p%)')
 
-    @pyqtSlot()
     def open_chooser(self):
         dialog = QFileDialog.getExistingDirectory(self, 'Open Directory', '/home')
         if dialog:
             self.read_text.setText(dialog)
             self.can_start_sort()
 
-    @pyqtSlot()
     def open_dest_chooser(self):
         dialog = QFileDialog.getExistingDirectory(self, 'Open Directory', '/home')
         if dialog:
@@ -133,7 +128,6 @@ class DateSorter(QWidget):
     def update_progress(self, val):
         self.progress_bar.setValue(val[0])
 
-    @pyqtSlot()
     def start_sorter(self):
         self.read_text.setEnabled(False)
         self.sorted_text.setEnabled(False)
@@ -186,7 +180,7 @@ class DateSorter(QWidget):
 
     def find_photos(self):
         self.progress_bar.setFormat('Sorting (%p%)')
-        for filename in Path(self.read_text.text()).glob('**/*.*'):
+        for filename in Path(self.read_text.text()).rglob('**/*.*'):
             if filename.as_uri().endswith(('.png', '.jpg', '.jpeg')):
                 self.files.append(filename.as_posix())
         self.progress_bar.setMaximum(len(self.files))

@@ -1,16 +1,13 @@
-import cv2
 import os
-import numpy as np
 import shutil
-
 from datetime import datetime
-
 from pathlib import Path
 
-from PyQt5.QtGui import QIcon, QImageReader, QPixmap
+import cv2
+import numpy as np
+from PyQt5.QtCore import QThreadPool, pyqtSignal
 from PyQt5.QtWidgets import QWidget, QHBoxLayout, QGroupBox, QFileDialog, QVBoxLayout, QProgressBar, \
     QLabel, QLineEdit, QPushButton, QListWidget, QCheckBox
-from PyQt5.QtCore import pyqtSlot, QThreadPool, pyqtSignal
 
 from duplicate_finder.image_compare import ImageCompare
 from worker import Worker
@@ -19,14 +16,14 @@ from worker import Worker
 # Compares two images, one of which is already in an image format to save memory
 def compare_files(image1, file2):
     height1, width1, channel1 = image1.shape
-    image2 = cv2.imread(file2)
+    image2 = cv2.imread(file2, cv2.IMREAD_UNCHANGED)
     height2, width2, channel2 = image2.shape
 
     if (not height1 == height2) or (not width1 == width2):
         return False
 
-    gray1 = cv2.cvtColor(image1, cv2.COLOR_BGR2GRAY)
-    gray2 = cv2.cvtColor(image2, cv2.COLOR_BGR2GRAY)
+    gray1 = cv2.cvtColor(image1, cv2.COLOR_BGRA2GRAY)
+    gray2 = cv2.cvtColor(image2, cv2.COLOR_BGRA2GRAY)
 
     err = np.sum((gray1.astype("float") - gray2.astype("float")) ** 2)
     err /= float(gray1.shape[0] * gray2.shape[1])
@@ -162,10 +159,10 @@ class DuplicateFinder(QWidget):
         self.setLayout(layout)
 
     def update_progress(self, status):
-        self.compare_prog.setMinimum(status[0] + 1)
+        self.compare_prog.setMinimum(status[0] + 2)
         self.compare_prog.setMaximum(len(self.files))
-        self.progress_bar.setValue(status[0])
-        self.compare_prog.setValue(status[1])
+        self.progress_bar.setValue(status[0] + 1)
+        self.compare_prog.setValue(status[1] + 1)
 
     def open_folder(self):
         dialog = QFileDialog.getExistingDirectory(self, 'Open Directory', '/home')
@@ -179,7 +176,6 @@ class DuplicateFinder(QWidget):
             self.duplicate_box.setText(dialog)
             self.can_find_files()
 
-    @pyqtSlot()
     def find_files(self):
         self.text_box.setEnabled(False)
         self.duplicate_box.setEnabled(False)
@@ -187,7 +183,7 @@ class DuplicateFinder(QWidget):
         self.open_dup_dialog.setEnabled(False)
         self.find_button.setEnabled(False)
         self.progress_bar.setFormat('Scanning (%p%)')
-        for filename in Path(self.text_box.text()).glob('**/*.*'):
+        for filename in Path(self.text_box.text()).rglob('**/*.*'):
             if filename.as_uri().lower().endswith(('.png', '.jpg', '.jpeg')):
                 self.files.append(filename.as_posix())
         self.compare_prog.setFormat('Comparing (%p%)')
@@ -196,13 +192,12 @@ class DuplicateFinder(QWidget):
 
     def iterate_files(self, prog_sig):
         for first_img in range(len(self.files)):
-            image1 = cv2.imread(self.files[first_img])
+            image1 = cv2.imread(self.files[first_img], cv2.IMREAD_UNCHANGED)
             for second_img in range(first_img + 1, len(self.files)):
                 if compare_files(image1, self.files[second_img]):
                     self.duplicates[self.files[second_img]] = self.files[first_img]
                 prog_sig.emit((first_img, second_img))
 
-    @pyqtSlot()
     def update_after_completion(self):
         self.progress_bar.setFormat('Done (%p%)')
         self.progress_bar.setValue(self.progress_bar.maximum())
@@ -213,7 +208,6 @@ class DuplicateFinder(QWidget):
         self.move_button.setEnabled(True)
         self.update_list()
 
-    @pyqtSlot()
     def list_clicked(self):
         if self.show_all.isChecked():
             return
@@ -222,16 +216,13 @@ class DuplicateFinder(QWidget):
         self.remove_dupe.setEnabled(True)
         self.show_preview.setEnabled(True)
 
-    @pyqtSlot()
     def preview(self):
         ImageCompare(self.duplicates[self.current_selection], self.current_selection, self)
 
-    @pyqtSlot()
     def remove_duplicate(self):
         self.duplicates.pop(self.current_selection)
         self.update_list()
 
-    @pyqtSlot()
     def can_find_files(self):
         if os.path.isdir(self.text_box.text()) and os.path.isdir(self.duplicate_box.text()):
             self.find_button.setEnabled(True)
@@ -240,7 +231,6 @@ class DuplicateFinder(QWidget):
             self.find_button.setEnabled(False)
             self.progress_bar.setFormat('Waiting (%p%)')
 
-    @pyqtSlot()
     def move_files(self):
         dup_loc = self.duplicate_box.text()
         if not dup_loc[-1] == '/':
@@ -271,7 +261,6 @@ class DuplicateFinder(QWidget):
         self.update_list()
         self.show_all.setChecked(False)
 
-    @pyqtSlot()
     def update_list(self):
         self.show_preview.setEnabled(False)
         self.remove_dupe.setEnabled(False)
