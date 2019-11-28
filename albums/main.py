@@ -62,7 +62,6 @@ class Albums(QWidget):
         self.import_files = QPushButton('Import 0 Selected Items')
         self.edit_album_button = QPushButton('Edit Album')
         self.path = QLineEdit()
-        self.go_up = QPushButton('↑')
         self.import_flow = FlowLayout(self, 1, 1)
         self.scroll_widget = MouseFlowWidget(self.import_flow)
         self.sort_container = QVBoxLayout()
@@ -77,6 +76,9 @@ class Albums(QWidget):
         # Stores selected files and directories
         self.selected_files = []
         self.selected_album_files = []
+        # Album management layout
+        self.container = QVBoxLayout()
+        self.flow = FlowLayout(self.container.parent(), 1, 1)
 
         # GUI
         self.album_list = QListWidget()
@@ -84,34 +86,41 @@ class Albums(QWidget):
         main_layout = QVBoxLayout()
         main_layout.addLayout(self.init_gui())
 
+        # File group
         file = QGroupBox('File')
         file_controls = QHBoxLayout()
         file.setLayout(file_controls)
+
+        reload_photos = QPushButton('Refresh Photos')
+        reload_photos.setToolTip('Refreshes all photos to full resolution')
+        reload_photos.clicked.connect(self.refresh_photos)
+        file_controls.addWidget(reload_photos)
+
         save = QPushButton('Save')
         save.clicked.connect(self.save_albums)
         file_controls.addWidget(save)
+
         rescan = QPushButton('Rescan for Albums')
         rescan.setToolTip('Scans for albums in the data directory ('
                           + appdirs.user_data_dir('PhotoUtilities', 'JackHogan') + ')')
         rescan.clicked.connect(self.rescan_albums)
         file_controls.addWidget(rescan)
+
         import_album = QPushButton('Import')
         import_album.clicked.connect(self.import_fat)
         file_controls.addWidget(import_album)
+
         self.export_album = QPushButton('Export')
         self.export_album.setEnabled(False)
         self.export_album.clicked.connect(self.export_fat)
         file_controls.addWidget(self.export_album)
+
         self.recover_album = QPushButton('Recover Album')
         self.recover_album.setToolTip('Attempts rebuild of selected album using a selected album')
         self.recover_album.clicked.connect(self.recover_current_album)
         self.recover_album.setEnabled(False)
         file_controls.addWidget(self.recover_album)
         main_layout.addWidget(file)
-
-        # Album management layout
-        self.container = QVBoxLayout()
-        self.flow = FlowLayout(self.container.parent(), 1, 1)
 
         # Remove all selected items from album
         self.remove_from_album = QPushButton('Remove Selected From Album')
@@ -177,9 +186,10 @@ class Albums(QWidget):
 
         import_layout = QVBoxLayout()
         path_finder = QHBoxLayout()
-        self.go_up.clicked.connect(self.go_up_dir)
-        self.go_up.setMaximumWidth(25)
-        path_finder.addWidget(self.go_up)
+        go_up = QPushButton('↑')
+        go_up.clicked.connect(self.go_up_dir)
+        go_up.setMaximumWidth(25)
+        path_finder.addWidget(go_up)
         self.path.setText(str(Path.home()))
         self.update_path()
         self.path.textChanged.connect(self.update_path)
@@ -217,6 +227,12 @@ class Albums(QWidget):
         import_group.setLayout(import_layout)
 
         return main_layout
+
+    # Refreshes photos to full resolution
+    def refresh_photos(self):
+        self.update_album_layout()
+        self.update_path()
+        self.import_resize(self.scroll_widget.size())
 
     # Sets album viewing area to correct layout and text
     def update_album_layout(self):

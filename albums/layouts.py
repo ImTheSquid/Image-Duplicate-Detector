@@ -156,7 +156,7 @@ class CaptionedImage(QWidget):
 
         # Image
         self.holder = QLabel('hold')
-        self.pixmap = QPixmap(QImageReader(image).read())
+        pixmap = QPixmap(QImageReader(image).read())
         self.holder.setAlignment(Qt.AlignCenter)
 
         # Init sizes
@@ -165,9 +165,10 @@ class CaptionedImage(QWidget):
         if height is not None:
             self.holder.setFixedHeight(height)
         if scaled:
-            self.holder.setPixmap(self.pixmap.scaled(self.holder.width(), self.holder.height(), Qt.KeepAspectRatio))
+            self.holder.setPixmap(pixmap.scaled(self.holder.width(), self.holder.height(), Qt.KeepAspectRatio,
+                                                Qt.SmoothTransformation))
         else:
-            self.holder.setPixmap(self.pixmap)
+            self.holder.setPixmap(pixmap)
 
         # Image caption
         caption = QLabel(text)
@@ -196,4 +197,4 @@ class CaptionedImage(QWidget):
         return self.file_type
 
     def setFixedWidth(self, w: int) -> None:
-        self.holder.setPixmap(self.pixmap.scaledToWidth(w))
+        self.holder.setPixmap(self.holder.pixmap().scaledToWidth(w, Qt.SmoothTransformation))
