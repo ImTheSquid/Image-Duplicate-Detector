@@ -155,10 +155,6 @@ class DuplicateFinder(QWidget):
         vert_right.addWidget(self.move_button)
         return vert_right
 
-    def init_gui(self, layout):
-        # Init the basic window frame
-        self.setLayout(layout)
-
     def update_progress(self, status):
         self.compare_prog.setMinimum(status[0] + 2)
         self.compare_prog.setMaximum(len(self.files))

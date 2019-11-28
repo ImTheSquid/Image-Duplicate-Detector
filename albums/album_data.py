@@ -375,3 +375,73 @@ class AlbumRecovery(QDialog):
                 if err == 0:
                     self.album.replace_path(lost, file.as_posix())
                     break
+
+
+class NewContentImporter(QDialog):
+    progress_signal = pyqtSignal(tuple)
+
+    def __init__(self, parent, files: [], dest_album: AlbumData):
+        super().__init__(parent)
+        self.setWindowFlag(Qt.WindowCloseButtonHint, False)
+        self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
+        self.setWindowTitle('Album Content Importer')
+        self.setWindowIcon(QIcon(QPixmap(QImageReader('assets/importAlbumContent.png').read())))
+
+        # Layout setup
+        layout = QVBoxLayout()
+        layout.addWidget(QLabel('Importing new files...'))
+        self.progress = QProgressBar()
+        self.progress.setValue(0)
+        self.progress.setFormat('Waiting (%p%)')
+        layout.addWidget(self.progress)
+        self.current_file = QLabel('Waiting...')
+        layout.addWidget(self.current_file)
+        layout.addStretch()
+
+        # Init thread
+        self.progress_signal.connect(self.update_progress)
+        self.thread_pool = QThreadPool()
+        self.thread_worker = Worker(self.run)
+        self.thread_worker.signals.progress.connect(self.progress_signal)
+        self.thread_worker.signals.finished.connect(self.update_after_completion)
+
+        self.files = files
+        self.dest_album = dest_album
+
+        self.setLayout(layout)
+        self.setFixedSize(300, 80)
+        self.thread_pool.start(self.thread_worker)
+        self.exec()
+
+    def update_progress(self, status: tuple):
+        self.progress.setFormat('Importing (%p%)')
+        self.progress.setValue(status[0] + 1)
+        self.current_file.setText(status[1])
+
+    def update_after_completion(self):
+        self.hide()
+
+    def run(self, signal):
+        length = 0
+        for file in self.files:
+            if isdir(file.get_file_path()):
+                length += len([f for f in Path(file.get_file_path()).rglob('**/*.*') if
+                               f.as_uri().lower().endswith(('.png', '.jpg', '.jpeg'))])
+            else:
+                length += 1
+        self.progress.setMaximum(length - 1)
+        index = 0
+        for file in self.files:
+            if isdir(file.get_file_path()):
+                for filename in Path(file.get_file_path()).rglob('**/*.*'):
+                    index += 1
+                    if filename.as_uri().lower().endswith(('.png', '.jpg', '.jpeg')) and \
+                            str(filename) not in self.dest_album.get_paths():
+                        self.dest_album.add_path(str(filename))
+                    signal.emit((index, basename(filename.as_posix())))
+            else:
+                index += 1
+                signal.emit((index, basename(file.get_file_path())))
+                if file.get_name().endswith(('.png', '.jpg', '.jpeg')) and \
+                        str(file.get_file_path()) not in self.dest_album.get_paths():
+                    self.dest_album.add_path(file.get_image())

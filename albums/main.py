@@ -11,7 +11,8 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QWidget, QGroupBox, QHBoxLayout, QListWidget, QVBoxLayout, QLabel, QPushButton, QLineEdit, \
     QFileDialog, QScrollArea, QMessageBox
 
-from albums.album_data import AlbumCreator, AlbumData, FatContentImporter, FatContentExporter, AlbumRecovery
+from albums.album_data import AlbumCreator, AlbumData, FatContentImporter, FatContentExporter, AlbumRecovery, \
+    NewContentImporter
 from albums.layouts import FlowLayout, CaptionedImage, MouseFlowWidget
 
 
@@ -521,16 +522,7 @@ class Albums(QWidget):
         self.save_albums(True)
 
     def import_selected_items(self):
-        for file in self.selected_files:
-            if isdir(file.get_file_path()):
-                for filename in Path(file.get_file_path()).rglob('**/*.*'):
-                    if filename.as_uri().lower().endswith(('.png', '.jpg', '.jpeg')) and \
-                            str(filename) not in self.selected_album.get_paths():
-                        self.selected_album.add_path(str(filename))
-            else:
-                if file.get_name().endswith(('.png', '.jpg', '.jpeg')) and \
-                        str(file.get_file_path()) not in self.selected_album.get_paths():
-                    self.selected_album.add_path(file.get_image())
+        NewContentImporter(self, self.selected_files, self.selected_album)
         self.clear_selected_items()
         self.update_album_layout()
 
