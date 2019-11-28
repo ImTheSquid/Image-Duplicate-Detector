@@ -14,6 +14,7 @@ from worker import Worker
 
 
 # Compares two images, one of which is already in an image format to save memory
+# Returns true if files are identical
 def compare_files(image1, file2):
     height1, width1, channel1 = image1.shape
     image2 = cv2.imread(file2, cv2.IMREAD_UNCHANGED)

@@ -1,14 +1,14 @@
 import pickle
 from os import makedirs, listdir
-from os.path import join, isdir, basename
+from os.path import join, isdir, basename, isfile
 from pathlib import Path
 
 import cv2
+import numpy as np
 from PyQt5.QtCore import Qt, QThreadPool, pyqtSignal
 from PyQt5.QtGui import QIcon, QImageReader, QPixmap
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLineEdit, QLabel, QDialogButtonBox, QProgressBar
+from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLineEdit, QLabel, QDialogButtonBox, QProgressBar, QMessageBox
 
-from albums.layouts import FlowLayout
 from worker import Worker
 
 
@@ -25,12 +25,22 @@ class AlbumData:
     def add_path(self, path: str):
         self.paths.append(path)
         self.hashes[path] = cv2.cvtColor(cv2.imread(path, cv2.IMREAD_UNCHANGED), cv2.COLOR_BGRA2GRAY)
-        # TODO Add some sort of hashing for recovery purposes (maybe like dupe sorter's)
+
+    def get_gray_from_path(self, path: str):
+        if path not in self.hashes:
+            return None
+        return self.hashes[path]
 
     def remove_path(self, path: str):
         self.paths.pop(self.paths.index(path))
+        self.hashes.pop(path)
 
-    def get_paths(self):
+    def replace_path(self, old_path: str, new_path: str):
+        self.paths[self.paths.index(old_path)] = new_path
+        self.hashes[new_path] = cv2.cvtColor(cv2.imread(new_path, cv2.IMREAD_UNCHANGED), cv2.COLOR_BGRA2GRAY)
+        self.hashes.pop(old_path)
+
+    def get_paths(self) -> [str]:
         return self.paths
 
     def get_title(self):
@@ -283,10 +293,9 @@ class FatContentExporter(QDialog):
             signal.emit(('COLLECTING', self.images.index(cap_img), cap_img.get_name()))
         fat_data = FatAlbumData(self.selected_album.get_title(), self.selected_album.get_description(), images)
 
-        signal.emit(('SAVING', 0, fat_data.get_title() + '.jfatalbum'))
-        self.progress.setMaximum(1)
+        signal.emit(('SAVING', -1, fat_data.get_title() + '.jfatalbum'))
+        self.progress.setMaximum(0)
         pickle.dump(fat_data, open(join(self.dest_dir, fat_data.get_title() + '.jfatalbum'), 'wb'), 4)
-        signal.emit(('SAVING', 1, fat_data.get_title() + '.jfatalbum'))
 
 
 class AlbumRecovery(QDialog):
@@ -338,21 +347,31 @@ class AlbumRecovery(QDialog):
         self.current_file.setText(status[2])
 
     def run(self, signal):
+        # Find which photos are missing
+        self.progress.setMaximum(0)
+        signal.emit(('INDEX', -1, 'Indexing lost photos...'))
+        lost_photos = []
+        for path in self.album.get_paths():
+            signal.emit(('INDEX', self.album.get_paths().index(path), basename(path)))
+            if not isfile(path):
+                lost_photos.append(path)
+
+        # Recurse through dirs to find possible matches
         files = [f for f in Path(self.recovery_dir).rglob("**/*.*") if f.as_uri().endswith(('.png', '.jpg', '.jpeg'))]
-        self.progress.setMaximum(len(files))
-
-
-class AlbumDataLoader(QDialog):
-    progress_signal = pyqtSignal(tuple)
-
-    def __init__(self, parent, src_album: AlbumData, dest_layout: FlowLayout, dest_mirror: []):
-        super().__init__(parent)
-        self.dest_mirror = dest_mirror
-        self.dest_layout = dest_layout
-        self.src_album = src_album
-
-
-# Imports selected items from import area
-class NewDataImporter(QDialog):
-    def __init__(self, parent):
-        super().__init__(parent)
+        self.progress.setMaximum(len(files) * len(lost_photos))
+        for lost in lost_photos:
+            gray = self.album.get_gray_from_path(lost)
+            if gray is None:
+                QMessageBox.critical(self, 'Error Recovering Photos', 'Incompatible album data.')
+                return
+            for file in files:
+                signal.emit(('LOCATE', lost_photos.index(lost) * len(files) + files.index(file),
+                             basename(file.as_posix())))
+                gray2 = cv2.cvtColor(cv2.imread(file.as_posix(), cv2.IMREAD_UNCHANGED), cv2.COLOR_BGRA2GRAY)
+                if not (gray.shape[0] == gray2.shape[0] and gray.shape[1] == gray2.shape[1]):
+                    continue
+                err = np.sum((gray.astype("float") - gray2.astype("float")) ** 2)
+                err /= float(gray.shape[0] * gray2.shape[1])
+                if err == 0:
+                    self.album.replace_path(lost, file.as_posix())
+                    break

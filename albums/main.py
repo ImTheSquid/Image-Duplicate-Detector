@@ -552,8 +552,12 @@ class Albums(QWidget):
         webbrowser.open('file://' + str(Path(self.selected_album_files[0].get_file_path()).parent))
 
     def recover_current_album(self):
-        search_dir = QFileDialog.getExistingDirectory(self, 'Open Directory', '/home')
+        search_dir = QFileDialog.getExistingDirectory(self, 'Select Directory to Search', '/home')
         if not search_dir:
             return
 
         AlbumRecovery(self, self.selected_album, search_dir)
+        self.rescan_albums()
+
+        QMessageBox.information(self, 'Album Recovery', 'Recovery completed successfully. '
+                                                        'However, not all files may have been found.')

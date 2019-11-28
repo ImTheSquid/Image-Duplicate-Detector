@@ -1,7 +1,7 @@
 import sys
 
 from PyQt5.QtGui import QIcon, QPixmap, QImageReader
-from PyQt5.QtWidgets import QApplication, QWidget, QTabWidget, QHBoxLayout, QDialog
+from PyQt5.QtWidgets import QApplication, QWidget, QTabWidget, QHBoxLayout
 
 from albums.main import Albums
 from date_sorter.main import DateSorter
@@ -15,7 +15,7 @@ class Runner(QWidget):
 
     def init_gui(self):
         # Init the basic window frame
-        self.setWindowTitle('Jack\'s Photo Utilities v.1.9')
+        self.setWindowTitle('Jack\'s Photo Utilities v.2.0')
         pix = QPixmap(QImageReader('assets/icon.png').read())
         self.setWindowIcon(QIcon(pix))
         layout = QHBoxLayout()
@@ -29,13 +29,6 @@ class Runner(QWidget):
         layout.addWidget(tabs)
         self.setLayout(layout)
         self.show()
-
-
-class StartupWindow(QDialog):
-    # TODO Add startup window as a launchpad
-    # TODO Save choices about this window in JSON file
-    def __init__(self):
-        super().__init__()
 
 
 if __name__ == '__main__':
