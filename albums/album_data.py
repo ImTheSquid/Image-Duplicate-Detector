@@ -357,7 +357,7 @@ class AlbumRecovery(QDialog):
                 lost_photos.append(path)
 
         # Recurse through dirs to find possible matches
-        files = [f for f in Path(self.recovery_dir).rglob("**/*.*") if f.as_uri().endswith(('.png', '.jpg', '.jpeg'))]
+        files = [f for f in Path(self.recovery_dir).rglob("**/*.*") if f.as_posix().lower().endswith(('.png', '.jpg', '.jpeg'))]
         self.progress.setMaximum(len(files) * len(lost_photos))
         for lost in lost_photos:
             gray = self.album.get_gray_from_path(lost)
@@ -426,22 +426,27 @@ class NewContentImporter(QDialog):
         for file in self.files:
             if isdir(file.get_file_path()):
                 length += len([f for f in Path(file.get_file_path()).rglob('**/*.*') if
-                               f.as_uri().lower().endswith(('.png', '.jpg', '.jpeg'))])
+                               f.as_posix().lower().endswith(('.png', '.jpg', '.jpeg'))])
             else:
                 length += 1
         self.progress.setMaximum(length - 1)
         index = 0
         for file in self.files:
             if isdir(file.get_file_path()):
+                try:
+                    listdir(file.get_file_path())
+                except PermissionError:
+                    QMessageBox.critical(self, 'Error Importing Files', 'Insufficient file permissions.')
+                    continue
                 for filename in Path(file.get_file_path()).rglob('**/*.*'):
                     index += 1
-                    if filename.as_uri().lower().endswith(('.png', '.jpg', '.jpeg')) and \
+                    if filename.as_posix().lower().endswith(('.png', '.jpg', '.jpeg')) and \
                             str(filename) not in self.dest_album.get_paths():
                         self.dest_album.add_path(str(filename))
                     signal.emit((index, basename(filename.as_posix())))
             else:
                 index += 1
                 signal.emit((index, basename(file.get_file_path())))
-                if file.get_name().endswith(('.png', '.jpg', '.jpeg')) and \
+                if file.get_name().lower().endswith(('.png', '.jpg', '.jpeg')) and \
                         str(file.get_file_path()) not in self.dest_album.get_paths():
                     self.dest_album.add_path(file.get_image())

@@ -1,25 +1,22 @@
 import os
 import shutil
 from datetime import datetime
+from os.path import basename, join
 from pathlib import Path
 
 from PIL import Image, ExifTags
-from PyQt5.QtCore import pyqtSignal, QThreadPool
+from PyQt5.QtCore import pyqtSignal, QThreadPool, Qt
 from PyQt5.QtWidgets import QWidget, QGroupBox, QVBoxLayout, QProgressBar, QLabel, QHBoxLayout, QLineEdit, \
-    QFileDialog, QRadioButton, QPushButton
+    QFileDialog, QRadioButton, QPushButton, QMessageBox
 
 from worker import Worker
 
 
+# Checks if a directory exists, then moves the specified file to that directory
 def check_exists(new_dir, file):
-    # Adds a slash onto the end of the dir to signify a directory
-    if not new_dir[-1] == '/':
-        new_dir += '/'
-    # Fixes slashes on Windows
-    new_dir = os.path.normpath(new_dir)
     # Makes directories and moves files
     os.makedirs(new_dir, exist_ok=True)
-    shutil.move(file, new_dir + file.split('/')[-1])
+    shutil.move(file, join(new_dir, basename(file)))
 
 
 def convert_to_month(mon):
@@ -99,8 +96,14 @@ class DateSorter(QWidget):
 
         options.addStretch()
 
+        warning = QLabel('WARNING: There is no check for file permissions.\n'
+                         'If you do not have permissions to access the selected directories the program will crash.')
+        warning.setStyleSheet('color:#FF0000')
+        warning.setAlignment(Qt.AlignCenter)
+
         self.start.setEnabled(False)
         self.start.clicked.connect(self.start_sorter)
+        options.addWidget(warning)
         options.addWidget(self.start)
 
         return options
@@ -139,14 +142,15 @@ class DateSorter(QWidget):
         self.files.clear()
         self.find_photos()
         self.thread_pool.start(self.thread_worker)
+        QMessageBox.information(self, 'Date Sorter', 'Sort completed successfully.')
 
     def sort_photos(self, update):
         for f in range(0, len(self.files)):
             file = self.files[f]
             with Image.open(file) as img:
-                if file.endswith('.jpeg'):
+                if file.lower().endswith('.jpeg'):
                     exif = {ExifTags.TAGS[k]: v for k, v in img.getexif().items() if k in ExifTags.TAGS}
-                elif file.endswith('.png'):
+                elif file.lower().endswith('.png'):
                     exif = img.text
                 else:
                     exif = img._getexif()
@@ -181,6 +185,6 @@ class DateSorter(QWidget):
     def find_photos(self):
         self.progress_bar.setFormat('Sorting (%p%)')
         for filename in Path(self.read_text.text()).rglob('**/*.*'):
-            if filename.as_uri().endswith(('.png', '.jpg', '.jpeg')):
+            if filename.as_posix().lower().endswith(('.png', '.jpg', '.jpeg')):
                 self.files.append(filename.as_posix())
         self.progress_bar.setMaximum(len(self.files))

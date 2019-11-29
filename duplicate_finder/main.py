@@ -5,7 +5,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-from PyQt5.QtCore import QThreadPool, pyqtSignal
+from PyQt5.QtCore import QThreadPool, pyqtSignal, Qt
 from PyQt5.QtWidgets import QWidget, QHBoxLayout, QGroupBox, QFileDialog, QVBoxLayout, QProgressBar, \
     QLabel, QLineEdit, QPushButton, QListWidget, QCheckBox
 
@@ -122,8 +122,15 @@ class DuplicateFinder(QWidget):
         vert_left.addLayout(duplicate_folder_sel)
         vert_left.addStretch()
 
+        warning = QLabel('WARNING: There is no check for file permissions.\n'
+                         'If you do not have permissions to access the selected directories the program will crash.')
+        warning.setAlignment(Qt.AlignCenter)
+        warning.setWordWrap(True)
+        warning.setStyleSheet('color:#FF0000')
+
         self.find_button.clicked.connect(self.find_files)
         self.find_button.setEnabled(False)
+        vert_left.addWidget(warning)
         vert_left.addWidget(self.find_button)
         return vert_left
 
@@ -181,7 +188,7 @@ class DuplicateFinder(QWidget):
         self.find_button.setEnabled(False)
         self.progress_bar.setFormat('Scanning (%p%)')
         for filename in Path(self.text_box.text()).rglob('**/*.*'):
-            if filename.as_uri().lower().endswith(('.png', '.jpg', '.jpeg')):
+            if filename.as_posix().lower().endswith(('.png', '.jpg', '.jpeg')):
                 self.files.append(filename.as_posix())
         self.compare_prog.setFormat('Comparing (%p%)')
         self.progress_bar.setMaximum(len(self.files))

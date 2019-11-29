@@ -97,6 +97,7 @@ class Albums(QWidget):
         file_controls.addWidget(reload_photos)
 
         save = QPushButton('Save')
+        save.setToolTip('Saves all albums')
         save.clicked.connect(self.save_albums)
         file_controls.addWidget(save)
 
@@ -108,11 +109,13 @@ class Albums(QWidget):
 
         import_album = QPushButton('Import')
         import_album.clicked.connect(self.import_fat)
+        import_album.setToolTip('Imports an album from a selected .jfatalbum file to a selected location')
         file_controls.addWidget(import_album)
 
         self.export_album = QPushButton('Export')
         self.export_album.setEnabled(False)
         self.export_album.clicked.connect(self.export_fat)
+        self.export_album.setToolTip('Exports an album to a .jfatalbum')
         file_controls.addWidget(self.export_album)
 
         self.recover_album = QPushButton('Recover Album')
@@ -331,6 +334,8 @@ class Albums(QWidget):
 
         # Add album to list
         results = self.add_new_album(album.get_title(), album.get_description(), True)
+        if not results:
+            return
         album.set_title(results[0])
         album.set_description(results[1])
         self.selected_album = [f for f in self.loaded_albums if f.get_title() == album.get_title()][0]
